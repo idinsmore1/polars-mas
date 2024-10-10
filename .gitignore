@@ -1,0 +1,7 @@
+.venv
+tmp/
+abdominal_aorta_phewas_file.csv
+example_phewas*
+
+__pycache__/
+*.pyc
