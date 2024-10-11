@@ -7,7 +7,7 @@ from pathlib import Path
 from threadpoolctl import ThreadpoolController, threadpool_limits
 from typing import Callable
 from importlib import import_module
-
+from pprint import pprint
 
 def run_aurora() -> None:
     parser = argparse.ArgumentParser(
@@ -66,6 +66,14 @@ def run_aurora() -> None:
         help="Categorical covariate column names.",
         default=None,
     )
+    parser.add_argument(
+        '-nv',
+        '--null-values',
+        type=str,
+        nargs='+',
+        help='List of values to be treated as missing values. Default is None (normal polars option).',
+        default=None
+    )
     # Test parameter arguments
     parser.add_argument(
         "-qt",
@@ -119,7 +127,7 @@ def run_aurora() -> None:
     )
     args = parser.parse_args()
     _validate_args(args)
-    # pprint(vars(args))
+    pprint(vars(args))
     aurora = _load_and_limit(args.threads, args.polars_threads)
     # Run Aurora
     aurora(**vars(args))

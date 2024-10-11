@@ -2,15 +2,107 @@ import polars as pl
 import polars.selectors as cs
 import numpy as np
 
+from loguru import logger
 from aurora.consts import male_specific_codes, female_specific_codes
 
 
 @pl.api.register_dataframe_namespace("aurora")
 @pl.api.register_lazyframe_namespace("aurora")
+class AuroraFrame:
+    def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
+        self._df = df
+
+    def check_for_constants(self) -> pl.DataFrame | pl.LazyFrame:
+        """
+        Check for columns in the dataframe are not constant.
+        """
+        if isinstance(self._df, pl.DataFrame):
+            const_cols = (
+                self._df
+                .select(pl.all().unique().len())
+                .transpose(include_header=True)
+                .filter(pl.col('column_0') == 1)
+                .select(pl.col('column'))
+            )['column'].to_list()
+        else:
+            const_cols = (
+                self._df
+                .select(pl.all().unique().len())
+                .collect()
+                .transpose(include_header=True)
+                .filter(pl.col('column_0') == 1)
+                .select(pl.col('column'))
+            )['column'].to_list()
+        if const_cols:
+            logger.error(f'Columns {const_cols} are constants. Please remove from analysis.')
+            raise ValueError
+        logger.info('No constant columns found.')
+        return self._df
+
+    def handle_missing_values(self, method: str, predictors: list[str]):
+        # If method is not drop, just fill the missing values with the specified method
+        if method != 'drop':
+            logger.info(f'Filling missing values in columns {predictors} with {method} method.')
+            return self._df.with_columns(pl.col(predictors).fill_null(strategy=method))
+        # If method is drop, drop rows with missing values in the specified predictors
+        new_df = self._df.drop_nulls(subset=predictors)
+        if isinstance(new_df, pl.DataFrame):
+            if new_df.height != self._df.height:
+                logger.info(f'Dropped {self._df.height - new_df.height} rows with missing values.')
+        else:
+            new_height = new_df.select(pl.len()).collect().item()
+            old_height = self._df.select(pl.len()).collect().item()
+            if new_height != old_height:
+                logger.info(f'Dropped {old_height - new_height} rows with missing values.')
+        return new_df
+    
+    def category_to_dummy(self, categorical_covariates: list[str], predictor: str, predictors: list[str], covariates: list[str], dependents: list[str]) -> pl.DataFrame | pl.LazyFrame:
+        if isinstance(self._df, pl.DataFrame):
+            not_binary = (
+                self._df
+                .select(pl.col(categorical_covariates).n_unique())
+                .transpose(include_header=True)
+                .filter(pl.col('column_0') > 2)
+            )['column'].to_list()
+        else:
+            not_binary = (
+                self._df
+                .select(pl.col(categorical_covariates).n_unique())
+                .collect()
+                .transpose(include_header=True)
+                .filter(pl.col('column_0') > 2)
+            )['column'].to_list()
+        if not_binary:
+            if isinstance(self._df, pl.LazyFrame):
+                logger.warning(f'Columns {not_binary} are not binary. LazyFrame will be loaded to create dummy variables.')
+                cats = self._df.collect()
+            else:
+                logger.info(f'Columns {not_binary} are not binary. Creating dummy variables.')
+                cats = self._df
+            dummy = cats.to_dummies(not_binary, drop_first=True)
+            dummy_cols = dummy.collect_schema().names()
+            # Update the lists in place to keep track of the predictors and covariates
+            predictors.clear()
+            predictors.extend([predictor] + [col for col in dummy_cols if col not in dependents and col != predictor])
+            original_covars = [col for col in covariates] # Make a copy for categorical knowledge
+            covariates.clear()
+            covariates.extend([col for col in predictors if col != predictor])
+            binary_covars = [col for col in categorical_covariates if col not in not_binary]
+            new_binary_covars = [col for col in covariates if col not in original_covars]
+            categorical_covariates.clear()
+            categorical_covariates.extend(binary_covars + new_binary_covars)
+
+            if isinstance(self._df, pl.LazyFrame):
+                # Convert the dummy dataframe back to a LazyFrame for faster operations
+                dummy = pl.LazyFrame(dummy)
+            return dummy
+        return self._df
+
+# @pl.api.register_dataframe_namespace("aurora")
+# @pl.api.register_lazyframe_namespace("aurora")
 class PhewasFrame:
     def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._df = df
-        self.col_names = df.collect_schema().names()
 
     def handle_missing(self, predictors: list[str], method=None) -> pl.DataFrame:
         """
