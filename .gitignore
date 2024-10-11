@@ -5,3 +5,5 @@ example_phewas*
 
 __pycache__/
 *.pyc
+
+test.sh
