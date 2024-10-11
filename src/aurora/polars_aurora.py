@@ -97,6 +97,28 @@ class AuroraFrame:
                 dummy = pl.LazyFrame(dummy)
             return dummy
         return self._df
+    
+    def transform_continuous(self, transform: str, predictors: list[str], categorical_covariates: list[str]) -> pl.DataFrame | pl.LazyFrame:
+        continuous_predictors = [col for col in predictors if col not in categorical_covariates]
+        if transform == 'standard':
+            logger.info(f'Standardizing continuous predictors {continuous_predictors}.')
+            return self._df.with_columns(pl.col(continuous_predictors).transforms.standardize())
+        elif transform == 'min-max':
+            logger.info(f'Min-max scaling continuous predictors {continuous_predictors}.')
+            return self._df.with_columns(pl.col(continuous_predictors).transforms.min_max())
+        return self._df
+    
+
+@pl.api.register_expr_namespace('transforms')
+class Transforms:
+    def __init__(self, expr: pl.Expr) -> None:
+        self._expr = expr
+
+    def standardize(self) -> pl.Expr:
+        return (self._expr - self._expr.mean()) / self._expr.std()
+    
+    def min_max(self) -> pl.Expr:
+        return (self._expr - self._expr.min()) / (self._expr.max() - self._expr.min())
 
 # @pl.api.register_dataframe_namespace("aurora")
 # @pl.api.register_lazyframe_namespace("aurora")

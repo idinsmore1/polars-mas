@@ -16,7 +16,7 @@ def aurora(
         frame_type: str,
         missing: str,
         quantitative: bool,
-        standardize: bool,
+        transform: str,
         min_cases: int,
         **kwargs
     ) -> None:
@@ -40,6 +40,7 @@ def aurora(
             covariates,
             dependents
         )
+        .aurora.transform_continuous(transform, predictors, categorical_covariates)
         .head().collect()
     )
     print(predictors, covariates, categorical_covariates)

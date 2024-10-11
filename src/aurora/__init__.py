@@ -90,10 +90,12 @@ def run_aurora() -> None:
         default='drop'
     )
     parser.add_argument(
-        "-st",
-        "--standardize",
-        action="store_true",
-        help="Standardize continuous variables.",
+        "-t",
+        "--transform",
+        type=str,
+        choices=['standard', 'min-max'],
+        help="Transform continuous covariates/predictor variables. Default is no transformation.",
+        default=None
     )
     parser.add_argument(
         "-mc",
