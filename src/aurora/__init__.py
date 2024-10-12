@@ -4,25 +4,26 @@ import argparse
 # import polars as pl
 from loguru import logger
 from pathlib import Path
-from threadpoolctl import ThreadpoolController, threadpool_limits
+from threadpoolctl import threadpool_limits
 from typing import Callable
 from importlib import import_module
 from pprint import pprint
+
 
 def run_aurora() -> None:
     parser = argparse.ArgumentParser(
         description="Aurora: A Python package for multiple testing analysis."
     )
+    parser.add_argument("-i", "--input", required=True, type=Path, help="Input file path.")
+    parser.add_argument("-o", "--output", required=True, type=Path, help="Output file path.")
+    parser.add_argument("-p", "--predictor", required=True, type=str, help="Predictor column name.")
     parser.add_argument(
-        "-i", "--input", required=True, type=Path, help="Input file path."
+        "-s",
+        "--separator",
+        type=str,
+        help='Column separator. Default is ","',
+        default=",",
     )
-    parser.add_argument(
-        "-o", "--output", required=True, type=Path, help="Output file path."
-    )
-    parser.add_argument(
-        "-p", "--predictor", required=True, type=str, help="Predictor column name."
-    )
-    parser.add_argument('-s', '--separator', type=str, help='Column separator. Default is ","', default=',')
     # Column selection arguments
     parser.add_argument(
         "-d",
@@ -33,13 +34,13 @@ def run_aurora() -> None:
         default=None,
     )
     parser.add_argument(
-        '-di', 
-        '--dependents-indices',
+        "-di",
+        "--dependents-indices",
         type=str,
-        help='''Dependent variable column indicies. Ignored if --dependents is used.
+        help="""Dependent variable column indicies. Ignored if --dependents is used.
         Accepts comma separated list of indices/indicies ranges. E.g. 2, 2-5, 2-, 2,3 , 2,5-8, 2,8- are all valid.
-        Range follows python slicing conventions - includes start, excludes end.''',
-        default=None
+        Range follows python slicing conventions - includes start, excludes end.""",
+        default=None,
     )
     parser.add_argument(
         "-c",
@@ -50,13 +51,13 @@ def run_aurora() -> None:
         default=None,
     )
     parser.add_argument(
-        '-ci',
-        '--covariates-indicies',
+        "-ci",
+        "--covariates-indicies",
         type=str,
-        help='''Covariate column indicies. Ignored if --covariates is used.
+        help="""Covariate column indicies. Ignored if --covariates is used.
         Accepts comma separated list of indices/indicies ranges. E.g. 2, 2-5, 2-, 2,3 , 2,5-8, 2,8- are all valid.
-        Range follows python slicing conventions - includes start, excludes end.''',
-        default=None
+        Range follows python slicing conventions - includes start, excludes end.""",
+        default=None,
     )
     parser.add_argument(
         "-cc",
@@ -67,12 +68,12 @@ def run_aurora() -> None:
         default=None,
     )
     parser.add_argument(
-        '-nv',
-        '--null-values',
+        "-nv",
+        "--null-values",
         type=str,
-        nargs='+',
-        help='List of values to be treated as missing values. Default is None (normal polars option).',
-        default=None
+        nargs="+",
+        help="List of values to be treated as missing values. Default is None (normal polars option).",
+        default=None,
     )
     # Test parameter arguments
     parser.add_argument(
@@ -82,27 +83,54 @@ def run_aurora() -> None:
         help="Dependent variables are quantitative traits.",
     )
     parser.add_argument(
-        '-m',
-        '--missing',
+        "-m",
+        "--missing",
         type=str,
-        choices=['drop', 'forward', 'backward', 'min', 'max', 'mean', 'zero', 'one'],
-        help='Method to handle missing values in covariates and predictor variables. If not specified, rows with missing values in the predictor and covariate columns will be dropped.',
-        default='drop'
+        choices=["drop", "forward", "backward", "min", "max", "mean", "zero", "one"],
+        help="Method to handle missing values in covariates and predictor variables. If not specified, rows with missing values in the predictor and covariate columns will be dropped.",
+        default="drop",
     )
     parser.add_argument(
         "-t",
         "--transform",
         type=str,
-        choices=['standard', 'min-max'],
+        choices=["standard", "min-max"],
         help="Transform continuous covariates/predictor variables. Default is no transformation.",
-        default=None
+        default=None,
     )
     parser.add_argument(
         "-mc",
         "--min-cases",
         type=int,
         help="Minimum number of cases for each dependent variable. Only applied when not --quantitative. Default is 20.",
-        default=20
+        default=20,
+    )
+    parser.add_argument(
+        "-lm",
+        "--linear-model",
+        type=str,
+        choices=["lm", "glm"],
+        help="Type of linear model to fit. Default is lm.",
+        default="lm",
+    )
+    parser.add_argument(
+        "-bm",
+        "--binary-model",
+        type=str,
+        choices=["firth", "logistic"],
+        help="Type of binary model to fit. Default is firth logistic regression.",
+        default="firth",
+    )
+    parser.add_argument(
+        "--phewas",
+        action="store_true",
+        help="Input data uses Phecodes for dependent variables.",
+    )
+    parser.add_argument(
+        "--phewas-sex-col",
+        type=str,
+        help="Sex covariate column name for PheWAS analysis. Default = 'sex'. Must be coded as male = 0 and female = 1.",
+        default="sex",
     )
     # Stuff for polars and numpy
     parser.add_argument(
@@ -166,11 +194,11 @@ def _validate_args(args):
         raise FileNotFoundError(f"Output directory not found: {args.output.parent}")
     # Load in the header of the input file to check passed columns
     file_col_names = _load_input_header(args.input, args.separator)
-    logger.info(f'{len(file_col_names)} columns found in input file.')
+    logger.info(f"{len(file_col_names)} columns found in input file.")
     # Check predictor
     if args.predictor not in file_col_names:
         raise ValueError(f"Predictor column '{args.predictor}' not found in input columns.")
-    
+
     # Check dependents
     if args.dependents:
         for dep in args.dependents:
@@ -180,7 +208,7 @@ def _validate_args(args):
         args.dependents = _match_columns_to_indices(args.dependents_indices, file_col_names)
     else:
         raise ValueError("No dependent variables specified.")
-    
+
     # Check covariates
     if args.covariates:
         for cov in args.covariates:
@@ -190,23 +218,29 @@ def _validate_args(args):
         args.covariates = _match_columns_to_indices(args.covariates_indicies, file_col_names)
     else:
         args.covariates = []
-    
+
     ## Check categorical covariates
     if args.categorical_covariates and not args.covariates:
         raise ValueError("Categorical covariates specified without specifying covariates")
     elif args.categorical_covariates:
         for cov in args.categorical_covariates:
             if cov not in args.covariates:
-                raise ValueError(f"Categorical covariate column '{cov}' not found in given covariates: {args.covariates}.")
+                raise ValueError(
+                    f"Categorical covariate column '{cov}' not found in given covariates: {args.covariates}."
+                )
     else:
         args.categorical_covariates = []
 
     # Check that threads < polars_threads and that polars_threads <= os.cpu_count()
     if args.polars_threads > os.cpu_count():
-        logger.warning(f"Number of Polars threads ({args.polars_threads}) exceeds number of available CPUs ({os.cpu_count()}). Setting Polars threads to {os.cpu_count()}.")
+        logger.warning(
+            f"Number of Polars threads ({args.polars_threads}) exceeds number of available CPUs ({os.cpu_count()}). Setting Polars threads to {os.cpu_count()}."
+        )
         args.polars_threads = os.cpu_count()
     if args.threads >= args.polars_threads:
-        logger.warning(f"Number of computation threads ({args.threads}) exceeds number of Polars threads ({args.polars_threads}). Setting threads to {args.polars_threads}.")
+        logger.warning(
+            f"Number of computation threads ({args.threads}) exceeds number of Polars threads ({args.polars_threads}). Setting threads to {args.polars_threads}."
+        )
         args.threads = args.polars_threads
 
 
@@ -214,33 +248,38 @@ def _validate_args(args):
 def _load_input_header(input_file: Path, separator: str) -> list[str]:
     with input_file.open() as f:
         return f.readline().strip().split(separator)
-    
+
+
 def _match_columns_to_indices(indices: str, col_names: list[str]) -> list[str]:
-    if ',' in indices:
-        splits = indices.split(',')
+    if "," in indices:
+        splits = indices.split(",")
         output_columns = []
         for split in splits:
-            if '' == split:
+            if "" == split:
                 continue
             # Recursively call this function to handle separated indices
             output_columns.extend(_match_columns_to_indices(split, col_names))
         # output_columns now is a flat list of all columns as text
         return output_columns
-    
+
     if indices.isnumeric():
         index = int(indices)
         if index >= len(col_names):
             raise ValueError(f"Index {index} out of range for {len(col_names)} columns in input file.")
         return [col_names[int(indices)]]
-    
-    elif '-' in indices:
-        start, end = indices.split('-')
+
+    elif "-" in indices:
+        start, end = indices.split("-")
         start_idx = int(start)
         if start_idx >= len(col_names):
-            raise ValueError(f"Start index {start_idx} out of range for input file column indices. {len(col_names)} columns found.")
-        if end != '' and int(end) >= len(col_names):
-            raise ValueError(f"End index {end} out of range for {len(col_names)} columns. If you want to use all remaining columns, use {start_idx}-.")
-        if end != '':
+            raise ValueError(
+                f"Start index {start_idx} out of range for input file column indices. {len(col_names)} columns found."
+            )
+        if end != "" and int(end) >= len(col_names):
+            raise ValueError(
+                f"End index {end} out of range for {len(col_names)} columns. If you want to use all remaining columns, use {start_idx}-."
+            )
+        if end != "":
             end_idx = int(end)
             return col_names[start_idx:end_idx]
         return col_names[start_idx:]
