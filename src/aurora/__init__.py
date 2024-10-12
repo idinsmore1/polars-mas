@@ -157,7 +157,6 @@ def run_aurora() -> None:
     )
     args = parser.parse_args()
     _validate_args(args)
-    pprint(vars(args))
     aurora = _load_and_limit(args.threads, args.polars_threads)
     # Run Aurora
     aurora(**vars(args))
@@ -182,7 +181,7 @@ def _load_and_limit(threads: int, polars_threads: int) -> Callable:
     os.environ["POLARS_MAX_THREADS"] = str(polars_threads)
     pl = import_module("polars")
     pla = import_module("aurora.polars_aurora")
-    aurora = import_module("aurora.main_logic")
+    aurora = import_module("aurora.main")
     threadpool_limits(limits=threads)
     return aurora.aurora
 

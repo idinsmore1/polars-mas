@@ -29,8 +29,7 @@ def aurora(
     df = reader(input, separator=separator, null_values=null_values)
     selected_columns = [predictor] + covariates + dependents
     predictors = [predictor] + covariates
-    print(predictors, covariates, categorical_covariates)
-    print(
+    preprocessed = (
         df.select(selected_columns)
         # preprocessing methods
         .aurora.check_predictors_for_constants(predictors)
@@ -41,7 +40,15 @@ def aurora(
         # Make long format for dependent variables and remove missing values
         .aurora.melt(predictors, dependents)
         .aurora.phewas_filter(kwargs["phewas"], kwargs["phewas_sex_col"], drop=True)
-        .head()
-        .collect()
     )
-    print(predictors, covariates, categorical_covariates)
+    assoc_kwargs = {
+        "output_file": output,
+        "predictors": predictors,
+        "quantitative": quantitative,
+        "binary_model": binary_model,
+        "linear_model": linear_model,
+        "min_cases": min_cases,
+        "is_phewas": kwargs["phewas"],
+    }
+    output = preprocessed.aurora.run_associations(**assoc_kwargs)
+    print(output)

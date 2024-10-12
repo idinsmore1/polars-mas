@@ -1,8 +1,11 @@
 import polars as pl
 
+from functools import partial
 from pathlib import Path
+
 from loguru import logger
-from aurora.consts import male_specific_codes, female_specific_codes
+from aurora.consts import male_specific_codes, female_specific_codes, phecode_defs
+from aurora.model_funcs import polars_firth_regression
 
 
 @pl.api.register_dataframe_namespace("aurora")
@@ -64,7 +67,6 @@ class AuroraFrame:
             predictors.clear()
             predictors.extend(new_predictors)
             return self._df.drop(pl.col(const_cols))
-        logger.info("No constant columns found.")
         return self._df
 
     def validate_dependents(
@@ -301,15 +303,68 @@ class AuroraFrame:
         # Otherwise, filter
         condition = (
             # Keep rows where sex is not male (1) OR phecode is not in female_specific_phecodes
-            ((pl.col(sex_col) != 0) | ~pl.col("phecode").is_in(female_specific_codes))
+            ((pl.col(sex_col) != 0) | ~pl.col("dependent").is_in(female_specific_codes))
             &
             # AND keep rows where sex is not female (0) OR phecode is not in male_specific_phecodes
-            ((pl.col(sex_col) != 1) | ~pl.col("phecode").is_in(male_specific_codes))
+            ((pl.col(sex_col) != 1) | ~pl.col("dependent").is_in(male_specific_codes))
         )
         return self._df.filter(condition)
-    
-    def run_associations(self, output_file: Path, quantitative: bool, is_phewas: bool) -> pl.DataFrame | pl.LazyFrame:
-        pass
+
+    def run_associations(
+        self,
+        output_file: Path,
+        predictors: list[str],
+        quantitative: bool,
+        binary_model: str,
+        linear_model: str,
+        is_phewas: bool,
+        min_cases: int,
+    ) -> pl.DataFrame | pl.LazyFrame:
+        if not quantitative:
+            if binary_model == "firth":
+                reg_function = partial(
+                    polars_firth_regression,
+                    predictors=predictors,
+                    dependent_values="dependent_value",
+                    min_cases=min_cases,
+                )
+                output = (
+                    self._df.group_by("dependent")
+                    .agg(
+                        pl.col("model_struct")
+                        .map_batches(reg_function, return_dtype=pl.Struct, returns_scalar=True)
+                        .alias("result")
+                    )
+                    .unnest("result")
+                    .with_columns(
+                        pl.lit(predictors[0]).alias("predictor")
+                    )
+                    
+                )
+                if is_phewas:
+                    # Add on the phecode definitions
+                    if isinstance(output, pl.LazyFrame):
+                        output = output.join(phecode_defs, left_on="dependent", right_on="phecode")
+                    else:
+                        output = output.join(phecode_defs.collect(), left_on="dependent", right_on="phecode")
+            elif binary_model != "firth":
+                logger.warning(
+                    "Other implementations have not be made yet. Please use 'firth' for binary models."
+                )
+        else:
+            logger.warning("Quantitative models have not been implemented yet.")
+        # All outputs will be named output
+        if isinstance(output, pl.LazyFrame):
+            output = output.collect()
+        output = (
+            output
+            .fill_nan(None)
+            .select([pl.col("dependent"), pl.col('predictor'), pl.all().exclude(["dependent", "predictor"])])
+            .sort('pval', nulls_last=True)
+        )
+        output.write_csv(output_file)
+        return output
+
 
 @pl.api.register_expr_namespace("transforms")
 class Transforms:
