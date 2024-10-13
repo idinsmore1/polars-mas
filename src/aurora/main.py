@@ -35,7 +35,9 @@ def aurora(
         .aurora.check_independents_for_constants(independents)
         .aurora.validate_dependents(dependents, quantitative)
         .aurora.handle_missing_values(missing, independents)
-        .aurora.category_to_dummy(categorical_covariates, predictors, independents, covariates, dependents)
+        .aurora.category_to_dummy(
+            categorical_covariates, predictors, independents, covariates, dependents
+        )
         .aurora.transform_continuous(transform, independents, categorical_covariates)
         # Make long format for dependent variables and remove missing values
         .aurora.melt(predictors, independents, dependents)

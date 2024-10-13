@@ -16,7 +16,14 @@ def run_aurora() -> None:
     )
     parser.add_argument("-i", "--input", required=True, type=Path, help="Input file path.")
     parser.add_argument("-o", "--output", required=True, type=Path, help="Output file path.")
-    parser.add_argument("-p", "--predictors", required=True, type=str, nargs='+', help="Predictor column names. These will be tested independently")
+    parser.add_argument(
+        "-p",
+        "--predictors",
+        required=True,
+        type=str,
+        nargs="+",
+        help="Predictor column names. These will be tested independently",
+    )
     parser.add_argument(
         "-s",
         "--separator",

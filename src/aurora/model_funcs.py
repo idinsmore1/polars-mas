@@ -11,16 +11,16 @@ def polars_firth_regression(
     output_struct = {
         # "predictor": 'nan',
         # "dependent": 'nan',
-        "pval": float('nan'),
-        "beta": float('nan'),
-        "se": float('nan'),
-        "OR": float('nan'),
-        "ci_low": float('nan'),
-        "ci_high": float('nan'),
-        "cases": float('nan'),
-        "controls": float('nan'),
-        "total_n": float('nan'),
-        "failed_reason": 'nan',
+        "pval": float("nan"),
+        "beta": float("nan"),
+        "se": float("nan"),
+        "OR": float("nan"),
+        "ci_low": float("nan"),
+        "ci_high": float("nan"),
+        "cases": float("nan"),
+        "controls": float("nan"),
+        "total_n": float("nan"),
+        "failed_reason": "nan",
     }
     regframe = struct_col.struct.unnest()
     phenotype = regframe.select("dependent").unique().item()

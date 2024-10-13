@@ -265,18 +265,28 @@ class AuroraFrame:
             return self._df.with_columns(pl.col(continuous_independents).transforms.min_max())
         return self._df
 
-    def melt(self, predictors: list[str], independents: list[str], dependents: list[str]) -> pl.DataFrame | pl.LazyFrame:
+    def melt(
+        self, predictors: list[str], independents: list[str], dependents: list[str]
+    ) -> pl.DataFrame | pl.LazyFrame:
         """
-        Transforms the DataFrame by unpivoting specified columns and creating a structured column.
+        Transforms the DataFrame by melting specified columns into a long format suitable for modeling.
+
         Args:
-            independents (list[str]): List of column names to be used as independents.
-            dependents (list[str]): List of column names to be used as dependents.
+            predictors (list[str]): List of predictor column names to be melted.
+            independents (list[str]): List of independent column names to be retained.
+            dependents (list[str]): List of dependent column names to be melted.
+
         Returns:
-            pl.DataFrame | pl.LazyFrame: A DataFrame or LazyFrame with the transformed structure.
-        The method performs the following steps:
-        1. Unpivots the DataFrame using the specified independents and dependents.
-        2. Drops rows with null values in the 'dependent_value' column.
-        3. Creates a new column 'model_struct' containing a struct of the independents, 'dependent', and 'dependent_value'.
+            pl.DataFrame | pl.LazyFrame: A DataFrame or LazyFrame with the melted structure, including a new column 'model_struct'
+            that contains a struct of predictor, predictor_value, covariates, dependent, and dependent_value.
+
+        Notes:
+            - The method first unpivots the DataFrame on the dependent columns, then drops any rows with null values in the
+              'dependent_value' column.
+            - It then unpivots the DataFrame again on the predictor columns.
+            - A new column 'model_struct' is created, which is a struct containing the predictor, predictor_value, covariates,
+              dependent, and dependent_value.
+            - The 'independents' list is modified in place to include 'predictor_value' and covariates.
         """
         covars = [col for col in independents if col not in predictors]
         melted_df = (
@@ -293,7 +303,11 @@ class AuroraFrame:
                 variable_name="predictor",
                 value_name="predictor_value",
             )
-            .with_columns(pl.struct("predictor", "predictor_value", *covars, "dependent", "dependent_value").alias("model_struct"))
+            .with_columns(
+                pl.struct("predictor", "predictor_value", *covars, "dependent", "dependent_value").alias(
+                    "model_struct"
+                )
+            )
         )
         independents.clear()
         independents.extend(["predictor_value", *covars])
@@ -349,14 +363,15 @@ class AuroraFrame:
                     # .with_columns(
                     #     pl.lit(independents[0]).alias("predictor")
                     # )
-                    
                 )
                 if is_phewas:
                     # Add on the phecode definitions
                     if isinstance(output, pl.LazyFrame):
                         output = output.join(phecode_defs, left_on="dependent", right_on="phecode")
                     else:
-                        output = output.join(phecode_defs.collect(), left_on="dependent", right_on="phecode")
+                        output = output.join(
+                            phecode_defs.collect(), left_on="dependent", right_on="phecode"
+                        )
             elif binary_model != "firth":
                 logger.warning(
                     "Other implementations have not be made yet. Please use 'firth' for binary models."
@@ -367,10 +382,11 @@ class AuroraFrame:
         if isinstance(output, pl.LazyFrame):
             output = output.collect()
         output = (
-            output
-            .fill_nan(None)
-            .select([pl.col("dependent"), pl.col('predictor'), pl.all().exclude(["dependent", "predictor"])])
-            .sort(['predictor', 'pval'], nulls_last=True)
+            output.fill_nan(None)
+            .select(
+                [pl.col("dependent"), pl.col("predictor"), pl.all().exclude(["dependent", "predictor"])]
+            )
+            .sort(["predictor", "pval"], nulls_last=True)
         )
         output.write_csv(output_file)
         return output
