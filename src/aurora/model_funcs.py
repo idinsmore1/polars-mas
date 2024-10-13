@@ -6,7 +6,7 @@ from firthlogist import FirthLogisticRegression
 
 
 def polars_firth_regression(
-    struct_col: pl.Struct, predictors: list[str], dependent_values: str, min_cases: int
+    struct_col: pl.Struct, independents: list[str], dependent_values: str, min_cases: int
 ) -> dict:
     output_struct = {
         "pval": float('nan'),
@@ -22,11 +22,11 @@ def polars_firth_regression(
     }
     regframe = struct_col.struct.unnest()
     phenotype = regframe.select("dependent").unique().item()
-    X = regframe.select(predictors).aurora.check_predictors_for_constants(predictors, drop=True)
+    X = regframe.select(independents).aurora.check_independents_for_constants(independents, drop=True)
     x_cols = X.collect_schema().names()
-    if predictors[0] not in x_cols:
+    if independents[0] not in x_cols:
         logger.warning(
-            f"Predictor {predictors[0]} was removed due to constant values. Skipping analysis."
+            f"Predictor {independents[0]} was removed due to constant values. Skipping analysis."
         )
         output_struct.update(
             {

@@ -8,7 +8,7 @@ def aurora(
     input: Path,
     output: Path,
     separator: str,
-    predictor: str,
+    predictors: str,
     dependents: list[str],
     covariates: list[str],
     categorical_covariates: list[str],
@@ -27,23 +27,23 @@ def aurora(
     elif frame_type == "lazy":
         reader = pl.scan_csv
     df = reader(input, separator=separator, null_values=null_values)
-    selected_columns = [predictor] + covariates + dependents
-    predictors = [predictor] + covariates
+    selected_columns = predictors + covariates + dependents
+    independents = predictors + covariates
     preprocessed = (
         df.select(selected_columns)
         # preprocessing methods
-        .aurora.check_predictors_for_constants(predictors)
+        .aurora.check_independents_for_constants(independents)
         .aurora.validate_dependents(dependents, quantitative)
-        .aurora.handle_missing_values(missing, predictors)
-        .aurora.category_to_dummy(categorical_covariates, predictor, predictors, covariates, dependents)
-        .aurora.transform_continuous(transform, predictors, categorical_covariates)
+        .aurora.handle_missing_values(missing, independents)
+        .aurora.category_to_dummy(categorical_covariates, predictors, independents, covariates, dependents)
+        .aurora.transform_continuous(transform, independents, categorical_covariates)
         # Make long format for dependent variables and remove missing values
-        .aurora.melt(predictors, dependents)
+        .aurora.melt(independents, dependents)
         .aurora.phewas_filter(kwargs["phewas"], kwargs["phewas_sex_col"], drop=True)
     )
     assoc_kwargs = {
         "output_file": output,
-        "predictors": predictors,
+        "independents": independents,
         "quantitative": quantitative,
         "binary_model": binary_model,
         "linear_model": linear_model,

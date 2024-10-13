@@ -16,7 +16,7 @@ def run_aurora() -> None:
     )
     parser.add_argument("-i", "--input", required=True, type=Path, help="Input file path.")
     parser.add_argument("-o", "--output", required=True, type=Path, help="Output file path.")
-    parser.add_argument("-p", "--predictor", required=True, type=str, help="Predictor column name.")
+    parser.add_argument("-p", "--predictors", required=True, type=str, nargs='+', help="Predictor column names. These will be tested independently")
     parser.add_argument(
         "-s",
         "--separator",
@@ -195,8 +195,8 @@ def _validate_args(args):
     file_col_names = _load_input_header(args.input, args.separator)
     logger.info(f"{len(file_col_names)} columns found in input file.")
     # Check predictor
-    if args.predictor not in file_col_names:
-        raise ValueError(f"Predictor column '{args.predictor}' not found in input columns.")
+    if any([predictor not in file_col_names for predictor in args.predictors]):
+        raise ValueError(f"Predictor column '{args.predictors}' not found in input columns.")
 
     # Check dependents
     if args.dependents:
