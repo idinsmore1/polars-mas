@@ -159,6 +159,7 @@ def run_aurora() -> None:
     _validate_args(args)
     aurora = _load_and_limit(args.threads, args.polars_threads)
     # Run Aurora
+    # pprint(vars(args))
     aurora(**vars(args))
 
 

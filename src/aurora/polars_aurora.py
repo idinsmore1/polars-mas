@@ -265,7 +265,7 @@ class AuroraFrame:
             return self._df.with_columns(pl.col(continuous_independents).transforms.min_max())
         return self._df
 
-    def melt(self, independents: list[str], dependents: list[str]) -> pl.DataFrame | pl.LazyFrame:
+    def melt(self, predictors: list[str], independents: list[str], dependents: list[str]) -> pl.DataFrame | pl.LazyFrame:
         """
         Transforms the DataFrame by unpivoting specified columns and creating a structured column.
         Args:
@@ -278,7 +278,8 @@ class AuroraFrame:
         2. Drops rows with null values in the 'dependent_value' column.
         3. Creates a new column 'model_struct' containing a struct of the independents, 'dependent', and 'dependent_value'.
         """
-        return (
+        covars = [col for col in independents if col not in predictors]
+        melted_df = (
             self._df.unpivot(
                 index=independents,
                 on=dependents,
@@ -286,8 +287,17 @@ class AuroraFrame:
                 value_name="dependent_value",
             )
             .drop_nulls(subset=["dependent_value"])
-            .with_columns(pl.struct(*independents, "dependent", "dependent_value").alias("model_struct"))
+            .unpivot(
+                index=covars + ["dependent", "dependent_value"],
+                on=predictors,
+                variable_name="predictor",
+                value_name="predictor_value",
+            )
+            .with_columns(pl.struct("predictor", "predictor_value", *covars, "dependent", "dependent_value").alias("model_struct"))
         )
+        independents.clear()
+        independents.extend(["predictor_value", *covars])
+        return melted_df
 
     def phewas_filter(self, is_phewas: bool, sex_col: str, drop: True) -> pl.DataFrame | pl.LazyFrame:
         if not is_phewas:
@@ -329,16 +339,16 @@ class AuroraFrame:
                     min_cases=min_cases,
                 )
                 output = (
-                    self._df.group_by("dependent")
+                    self._df.group_by("dependent", "predictor")
                     .agg(
                         pl.col("model_struct")
                         .map_batches(reg_function, return_dtype=pl.Struct, returns_scalar=True)
                         .alias("result")
                     )
                     .unnest("result")
-                    .with_columns(
-                        pl.lit(independents[0]).alias("predictor")
-                    )
+                    # .with_columns(
+                    #     pl.lit(independents[0]).alias("predictor")
+                    # )
                     
                 )
                 if is_phewas:
@@ -360,7 +370,7 @@ class AuroraFrame:
             output
             .fill_nan(None)
             .select([pl.col("dependent"), pl.col('predictor'), pl.all().exclude(["dependent", "predictor"])])
-            .sort('pval', nulls_last=True)
+            .sort(['predictor', 'pval'], nulls_last=True)
         )
         output.write_csv(output_file)
         return output

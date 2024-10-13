@@ -38,7 +38,7 @@ def aurora(
         .aurora.category_to_dummy(categorical_covariates, predictors, independents, covariates, dependents)
         .aurora.transform_continuous(transform, independents, categorical_covariates)
         # Make long format for dependent variables and remove missing values
-        .aurora.melt(independents, dependents)
+        .aurora.melt(predictors, independents, dependents)
         .aurora.phewas_filter(kwargs["phewas"], kwargs["phewas_sex_col"], drop=True)
     )
     assoc_kwargs = {

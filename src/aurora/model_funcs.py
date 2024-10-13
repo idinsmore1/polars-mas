@@ -9,6 +9,8 @@ def polars_firth_regression(
     struct_col: pl.Struct, independents: list[str], dependent_values: str, min_cases: int
 ) -> dict:
     output_struct = {
+        # "predictor": 'nan',
+        # "dependent": 'nan',
         "pval": float('nan'),
         "beta": float('nan'),
         "se": float('nan'),
@@ -22,9 +24,9 @@ def polars_firth_regression(
     }
     regframe = struct_col.struct.unnest()
     phenotype = regframe.select("dependent").unique().item()
+    predictor = regframe.select("predictor").unique().item()
     X = regframe.select(independents).aurora.check_independents_for_constants(independents, drop=True)
-    x_cols = X.collect_schema().names()
-    if independents[0] not in x_cols:
+    if independents[0] not in X.collect_schema().names():
         logger.warning(
             f"Predictor {independents[0]} was removed due to constant values. Skipping analysis."
         )
