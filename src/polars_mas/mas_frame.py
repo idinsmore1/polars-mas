@@ -4,13 +4,13 @@ from functools import partial
 from pathlib import Path
 
 from loguru import logger
-from aurora.consts import male_specific_codes, female_specific_codes, phecode_defs
-from aurora.model_funcs import polars_firth_regression
+from polars_mas.consts import male_specific_codes, female_specific_codes, phecode_defs
+from polars_mas.model_funcs import polars_firth_regression
 
 
-@pl.api.register_dataframe_namespace("aurora")
-@pl.api.register_lazyframe_namespace("aurora")
-class AuroraFrame:
+@pl.api.register_dataframe_namespace("polars_mas")
+@pl.api.register_lazyframe_namespace("polars_mas")
+class MASFrame:
     def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._df = df
 

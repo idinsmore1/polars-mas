@@ -1,10 +1,10 @@
 import polars as pl
-import aurora.polars_aurora as pla
+import polars_mas.mas_frame as pla
 
 from pathlib import Path
 
 
-def aurora(
+def run_mas(
     input: Path,
     output: Path,
     separator: str,
@@ -32,16 +32,16 @@ def aurora(
     preprocessed = (
         df.select(selected_columns)
         # preprocessing methods
-        .aurora.check_independents_for_constants(independents)
-        .aurora.validate_dependents(dependents, quantitative)
-        .aurora.handle_missing_values(missing, independents)
-        .aurora.category_to_dummy(
+        .polars_mas.check_independents_for_constants(independents)
+        .polars_mas.validate_dependents(dependents, quantitative)
+        .polars_mas.handle_missing_values(missing, independents)
+        .polars_mas.category_to_dummy(
             categorical_covariates, predictors, independents, covariates, dependents
         )
-        .aurora.transform_continuous(transform, independents, categorical_covariates)
+        .polars_mas.transform_continuous(transform, independents, categorical_covariates)
         # Make long format for dependent variables and remove missing values
-        .aurora.melt(predictors, independents, dependents)
-        .aurora.phewas_filter(kwargs["phewas"], kwargs["phewas_sex_col"], drop=True)
+        .polars_mas.melt(predictors, independents, dependents)
+        .polars_mas.phewas_filter(kwargs["phewas"], kwargs["phewas_sex_col"], drop=True)
     )
     assoc_kwargs = {
         "output_file": output,
@@ -52,5 +52,5 @@ def aurora(
         "min_cases": min_cases,
         "is_phewas": kwargs["phewas"],
     }
-    output = preprocessed.aurora.run_associations(**assoc_kwargs)
+    output = preprocessed.polars_mas.run_associations(**assoc_kwargs)
     print(output)

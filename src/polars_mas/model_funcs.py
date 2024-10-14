@@ -1,5 +1,5 @@
 import polars as pl
-import aurora.polars_aurora as pla
+import polars_mas.mas_frame as pla
 import numpy as np
 from loguru import logger
 from firthlogist import FirthLogisticRegression
@@ -39,7 +39,7 @@ def polars_firth_regression(
     regframe = struct_col.struct.unnest()
     dependent = regframe.select("dependent").unique().item()
     predictor = regframe.select("predictor").unique().item()
-    X = regframe.select(independents).aurora.check_independents_for_constants(independents, drop=True, dependent=dependent)
+    X = regframe.select(independents).polars_mas.check_independents_for_constants(independents, drop=True, dependent=dependent)
     if independents[0] not in X.collect_schema().names():
         logger.warning(
             f"Predictor {independents[0]} was removed due to constant values. Skipping analysis."

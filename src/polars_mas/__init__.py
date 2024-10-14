@@ -10,7 +10,7 @@ from importlib import import_module
 from pprint import pprint
 
 
-def run_aurora() -> None:
+def multiple_association_study() -> None:
     parser = argparse.ArgumentParser(
         description="Aurora: A Python package for multiple testing analysis."
     )
@@ -164,10 +164,10 @@ def run_aurora() -> None:
     )
     args = parser.parse_args()
     _validate_args(args)
-    aurora = _load_and_limit(args.threads, args.polars_threads)
+    run_mas = _load_and_limit(args.threads, args.polars_threads)
     # Run Aurora
     # pprint(vars(args))
-    aurora(**vars(args))
+    run_mas(**vars(args))
 
 
 def _load_and_limit(threads: int, polars_threads: int) -> Callable:
@@ -188,10 +188,10 @@ def _load_and_limit(threads: int, polars_threads: int) -> Callable:
     """
     os.environ["POLARS_MAX_THREADS"] = str(polars_threads)
     pl = import_module("polars")
-    pla = import_module("aurora.polars_aurora")
-    aurora = import_module("aurora.main")
+    pla = import_module("polars_mas.mas_frame")
+    polars_mas = import_module("polars_mas.main")
     threadpool_limits(limits=threads)
-    return aurora.aurora
+    return polars_mas.run_mas
 
 
 def _validate_args(args):

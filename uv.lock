@@ -2,23 +2,6 @@ version = 1
 requires-python = ">=3.10"
 
 [[package]]
-name = "aurora"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "firthlogist" },
-    { name = "loguru" },
-    { name = "polars" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "firthlogist", specifier = ">=0.5.0" },
-    { name = "loguru", specifier = ">=0.7.2" },
-    { name = "polars", specifier = ">=1.9.0" },
-]
-
-[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -106,6 +89,23 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/bb/57/b286b317f061d8f17bab4726a27e7b185fbf3d3db65cf689074256ea34a9/polars-1.9.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f85f132732aa63c6f3b502b0fdfc3ba9f0b78cc6330059b5a2d6f9fd78508acb", size = 33063367 },
     { url = "https://files.pythonhosted.org/packages/e5/25/bf5d43dcb538bf6573b15f3d5995a52be61b8fbce0cd737e72c4d25eef88/polars-1.9.0-cp38-abi3-manylinux_2_24_aarch64.whl", hash = "sha256:f753c8941a3b3249d59262d68a856714a96a7d4e16977aefbb196be0c192e151", size = 29764698 },
     { url = "https://files.pythonhosted.org/packages/a6/cf/f9170a3ac20e0efb9d3c1cdacc677e35b711ffd5ec48a6d5f3da7b7d8663/polars-1.9.0-cp38-abi3-win_amd64.whl", hash = "sha256:95de07066cd797dd940fa2783708a7bef93c827a57be0f4dfad3575a6144212b", size = 32819142 },
+]
+
+[[package]]
+name = "polars-mas"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "firthlogist" },
+    { name = "loguru" },
+    { name = "polars" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "firthlogist", specifier = ">=0.5.0" },
+    { name = "loguru", specifier = ">=0.7.2" },
+    { name = "polars", specifier = ">=1.9.0" },
 ]
 
 [[package]]

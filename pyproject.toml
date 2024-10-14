@@ -1,7 +1,7 @@
 [project]
-name = "aurora"
+name = "polars-mas"
 version = "0.1.0"
-description = "aurora - a fast multiple testing library for python backed by polars"
+description = "polars-mas - a fast multiple asspciation library for python backed by polars"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-aurora = "aurora:run_aurora"
+polars-mas = "polars_mas:multiple_association_study"
 
 [build-system]
 requires = ["hatchling"]
