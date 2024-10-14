@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 
 # import polars as pl
@@ -162,8 +163,15 @@ def multiple_association_study() -> None:
         help="Number of threads for polars to use. Defaults to all threads on machine.",
         default=os.cpu_count(),
     )
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        action='store_true',
+        help='have more verbose logging'
+    )
     args = parser.parse_args()
     _validate_args(args)
+    setup_logger(args.output, args.verbose)
     run_mas = _load_and_limit(args.threads, args.polars_threads)
     # Run Aurora
     # pprint(vars(args))
@@ -292,3 +300,39 @@ def _match_columns_to_indices(indices: str, col_names: list[str]) -> list[str]:
         return col_names[start_idx:]
     else:
         raise ValueError(f"Invalid index format, must use '-' for a range: {indices}")
+    
+
+def setup_logger(output: Path, verbose: bool):
+    logger.remove()
+
+    log_file_path = output.with_suffix('.log')
+    logger.add(
+        log_file_path,
+        format="{time: DD-MM-YYYY -> HH:mm} | {level} | {message}",
+        level='INFO',
+        enqueue=True
+    )
+    if verbose:
+        stdout_level = 'DEBUG'
+        stderr_level = 'WARNING'
+    else:
+        stdout_level = 'INFO'
+        stdout_level = 'ERROR'
+
+    logger.add(
+        sys.stdout,
+        colorize=True,
+        format="<green>{time: DD-MM-YYYY -> HH:mm:ss}</green> <level>{message}</level>",
+        level=stdout_level,
+        filter=lambda record: record["level"].name not in ["WARNING", "ERROR"],
+        enqueue=True,
+    )
+    logger.add(
+        sys.stderr,
+        colorize=True,
+        format="<red>{time: DD-MM-YYYY -> HH:mm:ss}</red> <level>{message}</level>",
+        level=stdout_level,
+        filter=lambda record: record["level"].name
+        not in ["DEBUG", "INFO", "SUCCESS"],
+        enqueue=True,
+    )
