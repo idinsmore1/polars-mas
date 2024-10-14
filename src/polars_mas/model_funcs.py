@@ -23,8 +23,6 @@ def polars_firth_regression(
           number of cases, controls, total number of observations, and failure reason if any.
     """
     output_struct = {
-        # "predictor": 'nan',
-        # "dependent": 'nan',
         "pval": float("nan"),
         "beta": float("nan"),
         "se": float("nan"),
@@ -40,9 +38,9 @@ def polars_firth_regression(
     dependent = regframe.select("dependent").unique().item()
     predictor = regframe.select("predictor").unique().item()
     X = regframe.select(independents).polars_mas.check_independents_for_constants(independents, drop=True, dependent=dependent)
-    if independents[0] not in X.collect_schema().names():
+    if predictor not in X.collect_schema().names():
         logger.warning(
-            f"Predictor {independents[0]} was removed due to constant values. Skipping analysis."
+            f"Predictor {predictor} was removed due to constant values. Skipping analysis."
         )
         output_struct.update({"failed_reason": "Predictor removed due to constant values",})
         return output_struct
