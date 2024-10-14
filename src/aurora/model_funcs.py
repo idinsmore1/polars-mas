@@ -8,6 +8,20 @@ from firthlogist import FirthLogisticRegression
 def polars_firth_regression(
     struct_col: pl.Struct, independents: list[str], dependent_values: str, min_cases: int
 ) -> dict:
+    """
+    Perform Firth logistic regression on a given dataset.
+
+    Parameters:
+    struct_col (pl.Struct): A Polars Struct column containing the data.
+    independents (list[str]): List of independent variable names.
+    dependent_values (str): Name of the dependent variable.
+    min_cases (int): Minimum number of cases required to perform the regression.
+
+    Returns:
+    dict: A dictionary containing the results of the regression, including p-value, 
+          beta coefficient, standard error, odds ratio, confidence intervals, 
+          number of cases, controls, total number of observations, and failure reason if any.
+    """
     output_struct = {
         # "predictor": 'nan',
         # "dependent": 'nan',
@@ -30,11 +44,7 @@ def polars_firth_regression(
         logger.warning(
             f"Predictor {independents[0]} was removed due to constant values. Skipping analysis."
         )
-        output_struct.update(
-            {
-                "failed_reason": "Predictor removed due to constant values",
-            }
-        )
+        output_struct.update({"failed_reason": "Predictor removed due to constant values",})
         return output_struct
     y = regframe.select(dependent_values).to_numpy().ravel()
     cases = y.sum().astype(int)
