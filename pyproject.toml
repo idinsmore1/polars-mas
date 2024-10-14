@@ -1,7 +1,7 @@
 [project]
 name = "aurora"
 version = "0.1.0"
-description = "Add your description here"
+description = "aurora - a fast multiple testing library for python backed by polars"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
