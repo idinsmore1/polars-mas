@@ -22,6 +22,7 @@ def polars_firth_regression(
           beta coefficient, standard error, odds ratio, confidence intervals, 
           number of cases, controls, total number of observations, and failure reason if any.
     """
+    # Need to have the full struct to allow polars to output properly
     output_struct = {
         "pval": float("nan"),
         "beta": float("nan"),

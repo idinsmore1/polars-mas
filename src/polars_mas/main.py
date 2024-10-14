@@ -52,5 +52,6 @@ def run_mas(
         "min_cases": min_cases,
         "is_phewas": kwargs["phewas"],
     }
-    output = preprocessed.polars_mas.run_associations(**assoc_kwargs)
-    print(output)
+    output_df = preprocessed.polars_mas.run_associations(**assoc_kwargs)
+    output_df.write_csv(output)
+    print(output_df)

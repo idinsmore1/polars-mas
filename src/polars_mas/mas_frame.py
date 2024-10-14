@@ -366,9 +366,6 @@ class MASFrame:
                         .alias("result")
                     )
                     .unnest("result")
-                    # .with_columns(
-                    #     pl.lit(independents[0]).alias("predictor")
-                    # )
                 )
                 if is_phewas:
                     # Add on the phecode definitions
@@ -394,7 +391,6 @@ class MASFrame:
             )
             .sort(["predictor", "pval"], nulls_last=True)
         )
-        output.write_csv(output_file)
         return output
 
 
