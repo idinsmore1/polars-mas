@@ -1,10 +1,10 @@
 import polars as pl
 from pathlib import Path
 
-source_path = Path(__file__).parent.parent
+lib_path = Path(__file__).parent
 
 phecode_defs = pl.scan_csv(
-    source_path / "data/phecode_definitions1.2.csv",
+    lib_path / "data/phecode_definitions1.2.csv",
     schema_overrides={"phecode": pl.String},
 ).select(["phecode", "phenotype", "sex", "category", "category_number"])
 male_specific_codes = phecode_defs.filter(pl.col("sex") == "Male").collect()["phecode"].to_list()
