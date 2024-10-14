@@ -38,7 +38,7 @@ def polars_firth_regression(
     dependent = regframe.select("dependent").unique().item()
     predictor = regframe.select("predictor").unique().item()
     X = regframe.select(independents).polars_mas.check_independents_for_constants(independents, drop=True, dependent=dependent)
-    if predictor not in X.collect_schema().names():
+    if independents[0] not in X.collect_schema().names():
         logger.warning(
             f"Predictor {predictor} was removed due to constant values. Skipping analysis."
         )
