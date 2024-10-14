@@ -8,7 +8,7 @@ def aurora(
     input: Path,
     output: Path,
     separator: str,
-    predictors: str,
+    predictors: list[str],
     dependents: list[str],
     covariates: list[str],
     categorical_covariates: list[str],

@@ -14,7 +14,7 @@ class AuroraFrame:
     def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._df = df
 
-    def check_independents_for_constants(self, independents, drop=False) -> pl.DataFrame | pl.LazyFrame:
+    def check_independents_for_constants(self, independents, drop=False, dependent=None) -> pl.DataFrame | pl.LazyFrame:
         """
         Check for constant columns in the given independents and optionally drop them.
 
@@ -28,6 +28,8 @@ class AuroraFrame:
             drop (bool, optional): If True, constant columns will be dropped from the DataFrame.
                                    If False, an error will be raised if constant columns are found.
                                    Defaults to False.
+            dependent str: dependent variable being tested (useful when running regression for logging). 
+                           adds an additional log if columns are dropped.
 
         Returns:
             pl.DataFrame | pl.LazyFrame: The DataFrame with constant columns dropped if `drop` is True,
@@ -62,7 +64,11 @@ class AuroraFrame:
                     f'Columns {",".join(const_cols)} are constants. Please remove from analysis or set drop=True.'
                 )
                 raise ValueError
-            logger.warning(f'Dropping constant columns {",".join(const_cols)}.')
+            if dependent is not None:
+                pheno_str = f" for dependent {dependent}."
+            else:
+                pheno_str = '.'
+            logger.warning(f'Dropping constant columns {",".join(const_cols)}{pheno_str}')
             new_independents = [col for col in independents if col not in const_cols]
             independents.clear()
             independents.extend(new_independents)
@@ -154,7 +160,7 @@ class AuroraFrame:
     def category_to_dummy(
         self,
         categorical_covariates: list[str],
-        predictor: str,
+        predictors: str,
         independents: list[str],
         covariates: list[str],
         dependents: list[str],
@@ -214,11 +220,11 @@ class AuroraFrame:
             # Update the lists in place to keep track of the independents and covariates
             independents.clear()
             independents.extend(
-                [predictor] + [col for col in dummy_cols if col not in dependents and col != predictor]
+                [col for col in dummy_cols if col not in dependents]
             )
             original_covars = [col for col in covariates]  # Make a copy for categorical knowledge
             covariates.clear()
-            covariates.extend([col for col in independents if col != predictor])
+            covariates.extend([col for col in independents if col != predictors])
             binary_covars = [col for col in categorical_covariates if col not in not_binary]
             new_binary_covars = [col for col in covariates if col not in original_covars]
             categorical_covariates.clear()

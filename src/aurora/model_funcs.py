@@ -37,9 +37,9 @@ def polars_firth_regression(
         "failed_reason": "nan",
     }
     regframe = struct_col.struct.unnest()
-    phenotype = regframe.select("dependent").unique().item()
+    dependent = regframe.select("dependent").unique().item()
     predictor = regframe.select("predictor").unique().item()
-    X = regframe.select(independents).aurora.check_independents_for_constants(independents, drop=True)
+    X = regframe.select(independents).aurora.check_independents_for_constants(independents, drop=True, dependent=dependent)
     if independents[0] not in X.collect_schema().names():
         logger.warning(
             f"Predictor {independents[0]} was removed due to constant values. Skipping analysis."
@@ -59,7 +59,7 @@ def polars_firth_regression(
     )
     if cases < min_cases or controls < min_cases:
         logger.warning(
-            f"Too few cases or controls for {phenotype}: {cases} cases - {controls} controls. Skipping analysis."
+            f"Too few cases or controls for {dependent}: {cases} cases - {controls} controls. Skipping analysis."
         )
         output_struct.update(
             {
@@ -83,6 +83,6 @@ def polars_firth_regression(
         )
         return output_struct
     except Exception as e:
-        logger.error(f"Error in Firth regression for {phenotype}: {e}")
+        logger.error(f"Error in Firth regression for {dependent}: {e}")
         output_struct.update({"failed_reason": str(e)})
         return output_struct
