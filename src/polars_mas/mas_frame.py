@@ -459,7 +459,7 @@ class MASFrame:
             )
             .sort(["predictor", "pval"], nulls_last=True)
         )
-        logger.info(f"Time taken for group_by: {time.time() - start_time}")
+        logger.info(f"Time taken for group_by: {time.time() - start_time:.2f}")
         return output
 
     # def run_associations_serial(

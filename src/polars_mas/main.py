@@ -53,5 +53,7 @@ def run_mas(
     }
     output_df = preprocessed.polars_mas.run_associations(**assoc_kwargs)
     # output_df = preprocessed.polars_mas.run_associations_serial(**assoc_kwargs)
-    output_df.write_csv(output)
-    print(output_df)
+    for predictor in predictors:
+        pred_df = output_df.filter(pl.col("predictor") == predictor)
+        pred_df.write_csv(f"{output}_{predictor}.csv")
+        print(pred_df.head())

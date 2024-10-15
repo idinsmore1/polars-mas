@@ -16,7 +16,7 @@ def multiple_association_study() -> None:
         description="Polars-MAS: A Python package for multiple association analysis."
     )
     parser.add_argument("-i", "--input", required=True, type=Path, help="Input file path.")
-    parser.add_argument("-o", "--output", required=True, type=Path, help="Output file path.")
+    parser.add_argument("-o", "--output", required=True, type=Path, help="Output file prefix. Will be suffixed with '{predictor}.csv'.")
     parser.add_argument(
         "-p",
         "--predictors",
