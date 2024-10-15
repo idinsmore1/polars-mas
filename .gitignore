@@ -9,3 +9,5 @@ __pycache__/
 
 test.sh
 results/
+example_data/*.csv
+*.log

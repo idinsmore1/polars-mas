@@ -170,11 +170,10 @@ def multiple_association_study() -> None:
         help='have more verbose logging'
     )
     args = parser.parse_args()
-    _validate_args(args)
     setup_logger(args.output, args.verbose)
+    _validate_args(args)
     run_mas = _load_and_limit(args.threads, args.polars_threads)
     # Run Aurora
-    # pprint(vars(args))
     run_mas(**vars(args))
 
 
@@ -306,6 +305,8 @@ def setup_logger(output: Path, verbose: bool):
     logger.remove()
 
     log_file_path = output.with_suffix('.log')
+    if log_file_path.exists():
+        log_file_path.unlink()
     logger.add(
         log_file_path,
         format="{time: DD-MM-YYYY -> HH:mm} | {level} | {message}",
@@ -317,7 +318,7 @@ def setup_logger(output: Path, verbose: bool):
         stderr_level = 'WARNING'
     else:
         stdout_level = 'INFO'
-        stdout_level = 'ERROR'
+        stderr_level = 'ERROR'
 
     logger.add(
         sys.stdout,
@@ -331,8 +332,11 @@ def setup_logger(output: Path, verbose: bool):
         sys.stderr,
         colorize=True,
         format="<red>{time: DD-MM-YYYY -> HH:mm:ss}</red> <level>{message}</level>",
-        level=stdout_level,
+        level=stderr_level,
         filter=lambda record: record["level"].name
         not in ["DEBUG", "INFO", "SUCCESS"],
         enqueue=True,
     )
+
+if __name__ == "__main__":
+    multiple_association_study()

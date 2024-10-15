@@ -1,4 +1,5 @@
 import polars as pl
+import time
 
 from functools import partial
 from pathlib import Path
@@ -14,7 +15,7 @@ class MASFrame:
     def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._df = df
 
-    def check_independents_for_constants(self, independents, drop=False, dependent=None) -> pl.DataFrame | pl.LazyFrame:
+    def check_independents_for_constants(self, independents, drop=False) -> pl.DataFrame | pl.LazyFrame:
         """
         Check for constant columns in the given independents and optionally drop them.
 
@@ -64,16 +65,34 @@ class MASFrame:
                     f'Columns {",".join(const_cols)} are constants. Please remove from analysis or set drop=True.'
                 )
                 raise ValueError
-            if dependent is not None:
-                pheno_str = f" for dependent {dependent}."
-            else:
-                pheno_str = '.'
-            logger.warning(f'Dropping constant columns {",".join(const_cols)}{pheno_str}')
+            logger.warning(f'Dropping constant columns {",".join(const_cols)}')
             new_independents = [col for col in independents if col not in const_cols]
             independents.clear()
             independents.extend(new_independents)
             return self._df.drop(pl.col(const_cols))
         return self._df
+    
+    def check_grouped_independents_for_constants(self, independents: list[str], dependent: str = None) -> list[str]:
+        if isinstance(self._df, pl.DataFrame):
+            const_cols = (
+                self._df.select(pl.col(independents).drop_nulls().unique().len())
+                .transpose(include_header=True)
+                .filter(pl.col("column_0") == 1)
+                .select(pl.col("column"))
+            )["column"].to_list()
+        else:
+            const_cols = (
+                self._df.select(pl.col(independents).drop_nulls().unique().len())
+                .collect()
+                .transpose(include_header=True)
+                .filter(pl.col("column_0") == 1)
+                .select(pl.col("column"))
+            )["column"].to_list()
+        if const_cols:
+            logger.warning(f'Columns {",".join(const_cols)} are constants. Dropping from {dependent} analysis.')
+            non_consts = [col for col in independents if col not in const_cols]
+            return non_consts
+        return independents
 
     def validate_dependents(
         self, dependents: list[str], quantitative: bool
@@ -342,7 +361,6 @@ class MASFrame:
 
     def run_associations(
         self,
-        output_file: Path,
         independents: list[str],
         quantitative: bool,
         binary_model: str,
@@ -358,6 +376,7 @@ class MASFrame:
                     dependent_values="dependent_value",
                     min_cases=min_cases,
                 )
+                start_time = time.time()
                 output = (
                     self._df.group_by("dependent", "predictor")
                     .agg(
@@ -391,7 +410,41 @@ class MASFrame:
             )
             .sort(["predictor", "pval"], nulls_last=True)
         )
+        logger.info(f"Time taken for group_by: {time.time() - start_time}")
         return output
+    
+    # def run_associations_serial(
+    #     self,
+    #     independents: list[str],
+    #     quantitative: bool,
+    #     binary_model: str,
+    #     linear_model: str,
+    #     is_phewas: bool,
+    #     min_cases: int,
+    # ) -> pl.DataFrame | pl.LazyFrame:
+    #     if not quantitative:
+    #         if binary_model == "firth":
+    #             reg_function = partial(
+    #                 polars_firth_regression,
+    #                 independents=independents,
+    #                 dependent_values="dependent_value",
+    #                 min_cases=min_cases,
+    #             )
+    #             unique_deps = self._df.select("dependent").unique().collect()['dependent'].to_list()
+    #             output_vals = []
+    #             start_time = time.time()
+    #             for dep in tqdm(unique_deps):
+    #                 res = self._df.filter(pl.col("dependent") == dep).select(pl.col('model_struct').map_batches(reg_function, return_dtype=pl.Struct, returns_scalar=True).alias("result")).collect()['result']
+    #                 # print(res[0])
+    #                 # quit()
+    #                 output_vals.append(res[0])
+    #             logger.info(f"Time taken for serial: {time.time() - start_time}")
+    #             output = pl.DataFrame(output_vals).fill_nan(None)
+    #             # if is_phewas:
+    #                 # Add on the phecode definitions
+    #                 # output = output.join(phecode_defs.collect(), left_on="dependent", right_on="phecode")
+    #             return output
+    
 
 
 @pl.api.register_expr_namespace("transforms")

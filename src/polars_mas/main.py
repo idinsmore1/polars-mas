@@ -44,7 +44,6 @@ def run_mas(
         .polars_mas.phewas_filter(kwargs["phewas"], kwargs["phewas_sex_col"], drop=True)
     )
     assoc_kwargs = {
-        "output_file": output,
         "independents": independents,
         "quantitative": quantitative,
         "binary_model": binary_model,
@@ -53,5 +52,6 @@ def run_mas(
         "is_phewas": kwargs["phewas"],
     }
     output_df = preprocessed.polars_mas.run_associations(**assoc_kwargs)
+    # output_df = preprocessed.polars_mas.run_associations_serial(**assoc_kwargs)
     output_df.write_csv(output)
     print(output_df)

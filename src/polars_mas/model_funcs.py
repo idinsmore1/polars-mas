@@ -38,7 +38,9 @@ def polars_firth_regression(
     regframe = struct_col.struct.unnest()
     dependent = regframe.select("dependent").unique().item()
     predictor = regframe.select("predictor").unique().item()
-    X = regframe.select(independents).polars_mas.check_independents_for_constants(independents, drop=True, dependent=dependent)
+    X = regframe.select(independents)
+    non_consts = X.polars_mas.check_grouped_independents_for_constants(independents, dependent)
+    X = X.select(non_consts)
     if independents[0] not in X.collect_schema().names():
         logger.warning(
             f"Predictor {predictor} was removed due to constant values. Skipping analysis."
@@ -58,7 +60,7 @@ def polars_firth_regression(
     )
     if cases < min_cases or controls < min_cases:
         logger.warning(
-            f"Too few cases or controls for {dependent}: {cases} cases - {controls} controls. Skipping analysis."
+            f"Too few cases for {dependent}: {cases} cases - {controls} controls. Skipping analysis."
         )
         output_struct.update(
             {
@@ -70,6 +72,7 @@ def polars_firth_regression(
         # We are only interested in the first predictor for the association test
         fl = FirthLogisticRegression(max_iter=1000, test_vars=0)
         fl.fit(X, y)
+        # input_vars = X.collect_schema().names()
         output_struct.update(
             {
                 "pval": fl.pvals_[0],
@@ -78,6 +81,7 @@ def polars_firth_regression(
                 "OR": np.e ** fl.coef_[0],
                 "ci_low": fl.ci_[0][0],
                 "ci_high": fl.ci_[0][1],
+                # "input_vars": ",".join(input_vars),
             }
         )
         return output_struct
