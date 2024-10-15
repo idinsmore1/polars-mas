@@ -163,12 +163,7 @@ def multiple_association_study() -> None:
         help="Number of threads for polars to use. Defaults to all threads on machine.",
         default=os.cpu_count(),
     )
-    parser.add_argument(
-        '-v',
-        '--verbose',
-        action='store_true',
-        help='have more verbose logging'
-    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="have more verbose logging")
     args = parser.parse_args()
     setup_logger(args.output, args.verbose)
     _validate_args(args)
@@ -299,26 +294,26 @@ def _match_columns_to_indices(indices: str, col_names: list[str]) -> list[str]:
         return col_names[start_idx:]
     else:
         raise ValueError(f"Invalid index format, must use '-' for a range: {indices}")
-    
+
 
 def setup_logger(output: Path, verbose: bool):
     logger.remove()
 
-    log_file_path = output.with_suffix('.log')
+    log_file_path = output.with_suffix(".log")
     if log_file_path.exists():
         log_file_path.unlink()
     logger.add(
         log_file_path,
         format="{time: DD-MM-YYYY -> HH:mm} | {level} | {message}",
-        level='INFO',
-        enqueue=True
+        level="INFO",
+        enqueue=True,
     )
     if verbose:
-        stdout_level = 'DEBUG'
-        stderr_level = 'WARNING'
+        stdout_level = "DEBUG"
+        stderr_level = "WARNING"
     else:
-        stdout_level = 'INFO'
-        stderr_level = 'ERROR'
+        stdout_level = "INFO"
+        stderr_level = "ERROR"
 
     logger.add(
         sys.stdout,
@@ -333,10 +328,10 @@ def setup_logger(output: Path, verbose: bool):
         colorize=True,
         format="<red>{time: DD-MM-YYYY -> HH:mm:ss}</red> <level>{message}</level>",
         level=stderr_level,
-        filter=lambda record: record["level"].name
-        not in ["DEBUG", "INFO", "SUCCESS"],
+        filter=lambda record: record["level"].name not in ["DEBUG", "INFO", "SUCCESS"],
         enqueue=True,
     )
+
 
 if __name__ == "__main__":
     multiple_association_study()

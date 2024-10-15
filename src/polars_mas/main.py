@@ -33,7 +33,7 @@ def run_mas(
         df.select(selected_columns)
         # preprocessing methods
         .polars_mas.check_independents_for_constants(independents)
-        .polars_mas.validate_dependents(dependents, quantitative)
+        .polars_mas.validate_dependents(dependents, quantitative, min_cases)
         .polars_mas.handle_missing_values(missing, independents)
         .polars_mas.category_to_dummy(
             categorical_covariates, predictors, independents, covariates, dependents

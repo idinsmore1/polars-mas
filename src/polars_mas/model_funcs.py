@@ -18,8 +18,8 @@ def polars_firth_regression(
     min_cases (int): Minimum number of cases required to perform the regression.
 
     Returns:
-    dict: A dictionary containing the results of the regression, including p-value, 
-          beta coefficient, standard error, odds ratio, confidence intervals, 
+    dict: A dictionary containing the results of the regression, including p-value,
+          beta coefficient, standard error, odds ratio, confidence intervals,
           number of cases, controls, total number of observations, and failure reason if any.
     """
     # Need to have the full struct to allow polars to output properly
@@ -42,10 +42,12 @@ def polars_firth_regression(
     non_consts = X.polars_mas.check_grouped_independents_for_constants(independents, dependent)
     X = X.select(non_consts)
     if independents[0] not in X.collect_schema().names():
-        logger.warning(
-            f"Predictor {predictor} was removed due to constant values. Skipping analysis."
+        logger.warning(f"Predictor {predictor} was removed due to constant values. Skipping analysis.")
+        output_struct.update(
+            {
+                "failed_reason": "Predictor removed due to constant values",
+            }
         )
-        output_struct.update({"failed_reason": "Predictor removed due to constant values",})
         return output_struct
     y = regframe.select(dependent_values).to_numpy().ravel()
     cases = y.sum().astype(int)
@@ -58,16 +60,16 @@ def polars_firth_regression(
             "total_n": total_counts,
         }
     )
-    if cases < min_cases or controls < min_cases:
-        logger.warning(
-            f"Too few cases for {dependent}: {cases} cases - {controls} controls. Skipping analysis."
-        )
-        output_struct.update(
-            {
-                "failed_reason": "Too few cases or controls",
-            }
-        )
-        return output_struct
+    # if cases < min_cases or controls < min_cases:
+    #     logger.warning(
+    #         f"Too few cases for {dependent}: {cases} cases - {controls} controls. Skipping analysis."
+    #     )
+    #     output_struct.update(
+    #         {
+    #             "failed_reason": "Too few cases or controls",
+    #         }
+    #     )
+    #     return output_struct
     try:
         # We are only interested in the first predictor for the association test
         fl = FirthLogisticRegression(max_iter=1000, test_vars=0)

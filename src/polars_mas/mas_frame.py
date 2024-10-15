@@ -29,7 +29,7 @@ class MASFrame:
             drop (bool, optional): If True, constant columns will be dropped from the DataFrame.
                                    If False, an error will be raised if constant columns are found.
                                    Defaults to False.
-            dependent str: dependent variable being tested (useful when running regression for logging). 
+            dependent str: dependent variable being tested (useful when running regression for logging).
                            adds an additional log if columns are dropped.
 
         Returns:
@@ -71,8 +71,10 @@ class MASFrame:
             independents.extend(new_independents)
             return self._df.drop(pl.col(const_cols))
         return self._df
-    
-    def check_grouped_independents_for_constants(self, independents: list[str], dependent: str = None) -> list[str]:
+
+    def check_grouped_independents_for_constants(
+        self, independents: list[str], dependent: str = None
+    ) -> list[str]:
         if isinstance(self._df, pl.DataFrame):
             const_cols = (
                 self._df.select(pl.col(independents).drop_nulls().unique().len())
@@ -89,14 +91,14 @@ class MASFrame:
                 .select(pl.col("column"))
             )["column"].to_list()
         if const_cols:
-            logger.warning(f'Columns {",".join(const_cols)} are constants. Dropping from {dependent} analysis.')
+            logger.warning(
+                f'Columns {",".join(const_cols)} are constants. Dropping from {dependent} analysis.'
+            )
             non_consts = [col for col in independents if col not in const_cols]
             return non_consts
         return independents
 
-    def validate_dependents(
-        self, dependents: list[str], quantitative: bool
-    ) -> pl.DataFrame | pl.LazyFrame:
+    def validate_dependents(self, dependents: list[str], quantitative: bool, min_cases: int) -> pl.DataFrame | pl.LazyFrame:
         """
         Validates and casts the dependent variables in the DataFrame.
 
@@ -110,8 +112,32 @@ class MASFrame:
         Raises:
         ValueError: If any of the dependent variables are not binary when quantitative is False.
         """
+        # Handle quantitative variables
         if quantitative:
+            if isinstance(self._df, pl.LazyFrame):
+                valid_dependents = (
+                    self._df
+                    .select(dependents)
+                    .count()
+                    .collect()
+                    .transpose(include_header=True)
+                    .filter(pl.col('column_0') >= min_cases)
+                )['column'].to_list()
+            else:
+                valid_dependents = (
+                    self._df
+                    .select(dependents)
+                    .count()
+                    .transpose(include_header=True)
+                    .filter(pl.col('column_0') >= min_cases)
+                )['column'].to_list()
+            if set(valid_dependents) != set(dependents):
+                logger.warning(f'Dropping {len(dependents) - len(valid_dependents)} dependent variables from analysis due to having less than {min_cases} measurements.')
+                dependents.clear()
+                dependents.extend(valid_dependents)
             return self._df.with_columns(pl.col(dependents).cast(pl.Float64))
+        
+        # Handle binary variables
         if isinstance(self._df, pl.DataFrame):
             not_binary = (
                 self._df.select(pl.col(dependents).unique().drop_nulls().n_unique())
@@ -130,7 +156,32 @@ class MASFrame:
                 f"Dependent variables {not_binary} are not binary. Please remove from analysis."
             )
             raise ValueError
-        return self._df.with_columns(pl.col(dependents).cast(pl.UInt8))
+        if isinstance(self._df, pl.LazyFrame):
+                invalid_dependents = (
+                    self._df
+                    .select(dependents)
+                    .sum()
+                    .collect()
+                    .transpose(include_header=True)
+                    .filter(pl.col('column_0') < min_cases)
+                )['column'].to_list()
+        else:
+            invalid_dependents = (
+                self._df
+                .select(dependents)
+                .sum()
+                .transpose(include_header=True)
+                .filter(pl.col('column_0') < min_cases)
+            )['column'].to_list()
+        if invalid_dependents:
+            logger.warning(f'Dropping {len(invalid_dependents)} dependent variables from analysis due to having less than {min_cases} cases.')
+            valid_dependents = [col for col in dependents if col not in invalid_dependents]
+            dependents.clear()
+            dependents.extend(valid_dependents)
+            new_df = self._df.drop(pl.col(invalid_dependents))
+        else:
+            new_df = self._df
+        return new_df.with_columns(pl.col(dependents).cast(pl.UInt8))
 
     def handle_missing_values(self, method: str, independents: list[str]):
         """
@@ -238,9 +289,7 @@ class MASFrame:
             dummy_cols = dummy.collect_schema().names()
             # Update the lists in place to keep track of the independents and covariates
             independents.clear()
-            independents.extend(
-                [col for col in dummy_cols if col not in dependents]
-            )
+            independents.extend([col for col in dummy_cols if col not in dependents])
             original_covars = [col for col in covariates]  # Make a copy for categorical knowledge
             covariates.clear()
             covariates.extend([col for col in independents if col != predictors])
@@ -412,7 +461,7 @@ class MASFrame:
         )
         logger.info(f"Time taken for group_by: {time.time() - start_time}")
         return output
-    
+
     # def run_associations_serial(
     #     self,
     #     independents: list[str],
@@ -444,7 +493,6 @@ class MASFrame:
     #                 # Add on the phecode definitions
     #                 # output = output.join(phecode_defs.collect(), left_on="dependent", right_on="phecode")
     #             return output
-    
 
 
 @pl.api.register_expr_namespace("transforms")
