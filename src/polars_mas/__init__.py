@@ -168,10 +168,23 @@ def multiple_association_study() -> None:
     setup_logger(args.output, args.verbose)
     _validate_args(args)
     run_mas = _load_and_limit(args.threads, args.polars_threads)
-    logger.info("Running Aurora with the following arguments:")
-    logger.info(pprint(vars(args)))
+    logger.info("Running polars-mas with the following arguments:")
+    _log_args(args)
     # Run Aurora
     run_mas(**vars(args))
+
+
+def _log_args(args):
+    log = "Input arguments:\n"
+    for key, value in vars(args).items():
+        print_val = value
+        if key in ['dependents', 'covariates', 'predictors', 'categorical_covariates']:
+            if len(value) > 5:
+                print_val = f"{','.join(value[:2])}...{','.join(value[-2:])} - ({len(value)} total)"
+            else:
+                print_val = ','.join(value)
+        log += f"\t{key}: {print_val}\n"
+    logger.info(log)
 
 
 def _load_and_limit(threads: int, polars_threads: int) -> Callable:

@@ -1,5 +1,6 @@
 import polars as pl
 import time
+import datetime
 
 from functools import partial
 from pathlib import Path
@@ -416,7 +417,6 @@ class MASFrame:
         binary_model: str,
         linear_model: str,
         is_phewas: bool,
-        min_cases: int,
     ) -> pl.DataFrame | pl.LazyFrame:
         if not quantitative:
             if binary_model == "firth":
@@ -424,9 +424,8 @@ class MASFrame:
                     polars_firth_regression,
                     independents=independents,
                     dependent_values="dependent_value",
-                    min_cases=min_cases,
                 )
-                start_time = time.time()
+                start_time = time.perf_counter()
                 output = (
                     self._df.group_by("dependent", "predictor")
                     .agg(
@@ -449,7 +448,8 @@ class MASFrame:
                     "Other implementations have not be made yet. Please use 'firth' for binary models."
                 )
         else:
-            logger.warning("Quantitative models have not been implemented yet.")
+            logger.error("Quantitative models have not been implemented yet.")
+            raise NotImplementedError
         # All outputs will be named output
         if isinstance(output, pl.LazyFrame):
             output = output.collect()
@@ -460,40 +460,9 @@ class MASFrame:
             )
             .sort(["predictor", "pval"], nulls_last=True)
         )
-        logger.info(f"Time taken for group_by: {time.time() - start_time:.2f}")
+        end_time = time.perf_counter()
+        logger.success(f"Associations Complete! Runtime: {str(datetime.timedelta(seconds=(round(end_time - start_time))))}")
         return output
-
-    # def run_associations_serial(
-    #     self,
-    #     independents: list[str],
-    #     quantitative: bool,
-    #     binary_model: str,
-    #     linear_model: str,
-    #     is_phewas: bool,
-    #     min_cases: int,
-    # ) -> pl.DataFrame | pl.LazyFrame:
-    #     if not quantitative:
-    #         if binary_model == "firth":
-    #             reg_function = partial(
-    #                 polars_firth_regression,
-    #                 independents=independents,
-    #                 dependent_values="dependent_value",
-    #                 min_cases=min_cases,
-    #             )
-    #             unique_deps = self._df.select("dependent").unique().collect()['dependent'].to_list()
-    #             output_vals = []
-    #             start_time = time.time()
-    #             for dep in tqdm(unique_deps):
-    #                 res = self._df.filter(pl.col("dependent") == dep).select(pl.col('model_struct').map_batches(reg_function, return_dtype=pl.Struct, returns_scalar=True).alias("result")).collect()['result']
-    #                 # print(res[0])
-    #                 # quit()
-    #                 output_vals.append(res[0])
-    #             logger.info(f"Time taken for serial: {time.time() - start_time}")
-    #             output = pl.DataFrame(output_vals).fill_nan(None)
-    #             # if is_phewas:
-    #                 # Add on the phecode definitions
-    #                 # output = output.join(phecode_defs.collect(), left_on="dependent", right_on="phecode")
-    #             return output
 
 
 @pl.api.register_expr_namespace("transforms")

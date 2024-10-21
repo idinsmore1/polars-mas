@@ -48,7 +48,6 @@ def run_mas(
         "quantitative": quantitative,
         "binary_model": binary_model,
         "linear_model": linear_model,
-        "min_cases": min_cases,
         "is_phewas": kwargs["phewas"],
     }
     output_df = preprocessed.polars_mas.run_associations(**assoc_kwargs)
@@ -56,4 +55,4 @@ def run_mas(
     for predictor in predictors:
         pred_df = output_df.filter(pl.col("predictor") == predictor)
         pred_df.write_csv(f"{output}_{predictor}.csv")
-        print(pred_df.head())
+        # print(pred_df.head())
