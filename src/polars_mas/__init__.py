@@ -168,6 +168,8 @@ def multiple_association_study() -> None:
     setup_logger(args.output, args.verbose)
     _validate_args(args)
     run_mas = _load_and_limit(args.threads, args.polars_threads)
+    logger.info("Running Aurora with the following arguments:")
+    logger.info(pprint(vars(args)))
     # Run Aurora
     run_mas(**vars(args))
 

@@ -377,6 +377,7 @@ class MASFrame:
                 variable_name="predictor",
                 value_name="predictor_value",
             )
+            .drop_nulls(subset=["predictor_value"])
             .with_columns(
                 pl.struct("predictor", "predictor_value", *covars, "dependent", "dependent_value").alias(
                     "model_struct"
