@@ -6,7 +6,6 @@ from functools import partial
 from pathlib import Path
 
 from loguru import logger
-from tqdm.auto import tqdm
 from polars_mas.consts import male_specific_codes, female_specific_codes, phecode_defs
 from polars_mas.model_funcs import polars_firth_regression
 

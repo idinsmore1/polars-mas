@@ -1,6 +1,6 @@
 [project]
 name = "polars-mas"
-version = "0.1.5"
+version = "0.1.6"
 description = "polars-mas - a fast multiple asspciation library for python backed by polars"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -8,7 +8,6 @@ dependencies = [
     "firthlogist>=0.5.0",
     "loguru>=0.7.2",
     "polars>=1.9.0",
-    "tqdm>=4.66.5",
 ]
 
 [project.scripts]
