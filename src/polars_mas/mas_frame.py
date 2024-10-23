@@ -417,21 +417,18 @@ class MASFrame:
         binary_model: str,
         linear_model: str,
         is_phewas: bool,
+        num_groups: int
     ) -> pl.DataFrame | pl.LazyFrame:
-        if isinstance(self._df, pl.LazyFrame):
-            num_groups = self._df.select('dependent', 'predictor').unique().select(pl.len()).collect().item()
-        else:
-            num_groups = self._df.select('dependent', 'predictor').unique().height
         logger.info(f"Running associations for {num_groups} predictor~dependent pairs.")
         if not quantitative:
             if binary_model == "firth":
+                start_time = time.perf_counter()
                 reg_function = partial(
                     polars_firth_regression,
                     independents=independents,
                     dependent_values="dependent_value",
-                    num_groups=num_groups
+                    num_groups=num_groups, 
                 )
-                start_time = time.perf_counter()
                 output = (
                     self._df.group_by("dependent", "predictor")
                     .agg(

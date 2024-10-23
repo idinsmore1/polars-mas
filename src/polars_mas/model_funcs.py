@@ -7,19 +7,34 @@ from firthlogist import FirthLogisticRegression
 from polars_mas.consts import sex_specific_codes
 
 NUM_COMPLETED = 0
+TIME_PER_ASSOC = 0
 TIME_PER_BLOCK = 0
+PREV_TIME = None
 
-def _update_progress(assoc_time: float | None, num_groups: int) -> None:
+def _update_progress(num_groups: int) -> None:
     global NUM_COMPLETED
+    global TIME_PER_ASSOC
     global TIME_PER_BLOCK
-    NUM_COMPLETED += 1
+    global PREV_TIME
     block = 50
-    if assoc_time is not None:
-        TIME_PER_BLOCK += assoc_time
+
+    NUM_COMPLETED += 1
+    if PREV_TIME is None:
+        PREV_TIME = time.perf_counter()
+    now = time.perf_counter()
+    elapsed_time = now - PREV_TIME
+    # print(elapsed_time)
+    TIME_PER_ASSOC += elapsed_time
+    TIME_PER_BLOCK += elapsed_time
+    PREV_TIME = now
     if NUM_COMPLETED % block == 0:
-        avg_time = TIME_PER_BLOCK / block
+        avg_time = TIME_PER_ASSOC / NUM_COMPLETED
+        cpu_time_per_block = TIME_PER_BLOCK
+        wall_time_per_block = TIME_PER_BLOCK / pl.thread_pool_size()
         TIME_PER_BLOCK = 0
-        logger.info(f'Progress: [{NUM_COMPLETED}/{num_groups}] - {avg_time:.3f}s')
+        logger.log('PROGRESS', f'Completed: [{NUM_COMPLETED}/{num_groups}] - {cpu_time_per_block:.2f}s')
+    if NUM_COMPLETED == num_groups:
+        logger.success(f"Completed: [{NUM_COMPLETED}/{num_groups}] - {TIME_PER_ASSOC:.3f}s")
 
 def polars_firth_regression(
     struct_col: pl.Struct, independents: list[str], dependent_values: str, num_groups: int
@@ -38,6 +53,7 @@ def polars_firth_regression(
           beta coefficient, standard error, odds ratio, confidence intervals,
           number of cases, controls, total number of observations, and failure reason if any.
     """
+    start = time.perf_counter()
     # Need to have the full struct to allow polars to output properly
     output_struct = {
         "pval": float("nan"),
@@ -68,7 +84,7 @@ def polars_firth_regression(
                 "failed_reason": "Predictor removed due to constant values",
             }
         )
-        _update_progress(None, num_groups)
+        _update_progress(num_groups)
         return output_struct
     y = regframe.select(dependent_values).to_numpy().ravel()
     cases = y.sum().astype(int)
@@ -82,7 +98,6 @@ def polars_firth_regression(
         }
     )
     try:
-        start = time.perf_counter()
         # We are only interested in the first predictor for the association test
         fl = FirthLogisticRegression(max_iter=1000, test_vars=0)
         fl.fit(X, y)
@@ -100,12 +115,12 @@ def polars_firth_regression(
         )
         end = time.perf_counter()
         elapsed = end - start
-        _update_progress(elapsed, num_groups)
+        _update_progress(num_groups)
         return output_struct
     except Exception as e:
         end = time.perf_counter()
         elapsed = end - start
         logger.error(f"Error in Firth regression for {dependent}: {e}")
         output_struct.update({"failed_reason": str(e)})
-        _update_progress(elapsed, num_groups)
+        _update_progress(num_groups)
         return output_struct

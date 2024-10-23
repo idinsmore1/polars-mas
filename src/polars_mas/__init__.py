@@ -260,12 +260,11 @@ def _validate_args(args):
             f"Number of Polars threads ({args.polars_threads}) exceeds number of available CPUs ({os.cpu_count()}). Setting Polars threads to {os.cpu_count()}."
         )
         args.polars_threads = os.cpu_count()
-    if args.threads >= args.polars_threads:
+    if args.threads > os.cpu_count():
         logger.warning(
-            f"Number of computation threads ({args.threads}) exceeds number of Polars threads ({args.polars_threads}). Setting threads to {args.polars_threads}."
+            f"Number of computation threads ({args.threads}) exceeds number of available CPUs ({os.cpu_count()}). Setting threads to 4."
         )
-        args.threads = args.polars_threads
-
+        args.threads = 4
 
 ########### Validation functions ############
 def _load_input_header(input_file: Path, separator: str) -> list[str]:
@@ -328,7 +327,7 @@ def setup_logger(output: Path, verbose: bool):
     else:
         stdout_level = "INFO"
         stderr_level = "ERROR"
-
+    logger.level('PROGRESS', no=23, color="<cyan>", icon="🕐")
     logger.add(
         sys.stdout,
         colorize=True,

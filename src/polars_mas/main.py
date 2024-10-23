@@ -49,6 +49,7 @@ def run_mas(
         "binary_model": binary_model,
         "linear_model": linear_model,
         "is_phewas": kwargs["phewas"],
+        "num_groups": len(predictors) * len(dependents),
     }
     output_df = preprocessed.polars_mas.run_associations(**assoc_kwargs)
     # output_df = preprocessed.polars_mas.run_associations_serial(**assoc_kwargs)
