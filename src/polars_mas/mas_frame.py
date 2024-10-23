@@ -6,6 +6,7 @@ from functools import partial
 from pathlib import Path
 
 from loguru import logger
+from tqdm.auto import tqdm
 from polars_mas.consts import male_specific_codes, female_specific_codes, phecode_defs
 from polars_mas.model_funcs import polars_firth_regression
 
@@ -115,12 +116,11 @@ class MASFrame:
         """
         # Handle quantitative variables
         if quantitative:
-            if isinstance(self._df, pl.LazyFrame):
+            if isinstance(self._df, pl.DataFrame):
                 valid_dependents = (
                     self._df
                     .select(dependents)
                     .count()
-                    .collect()
                     .transpose(include_header=True)
                     .filter(pl.col('column_0') >= min_cases)
                 )['column'].to_list()
@@ -129,6 +129,7 @@ class MASFrame:
                     self._df
                     .select(dependents)
                     .count()
+                    .collect()
                     .transpose(include_header=True)
                     .filter(pl.col('column_0') >= min_cases)
                 )['column'].to_list()
@@ -157,12 +158,11 @@ class MASFrame:
                 f"Dependent variables {not_binary} are not binary. Please remove from analysis."
             )
             raise ValueError
-        if isinstance(self._df, pl.LazyFrame):
+        if isinstance(self._df, pl.DataFrame):
                 invalid_dependents = (
                     self._df
                     .select(dependents)
                     .sum()
-                    .collect()
                     .transpose(include_header=True)
                     .filter(pl.col('column_0') < min_cases)
                 )['column'].to_list()
@@ -171,6 +171,7 @@ class MASFrame:
                 self._df
                 .select(dependents)
                 .sum()
+                .collect()
                 .transpose(include_header=True)
                 .filter(pl.col('column_0') < min_cases)
             )['column'].to_list()
@@ -418,12 +419,18 @@ class MASFrame:
         linear_model: str,
         is_phewas: bool,
     ) -> pl.DataFrame | pl.LazyFrame:
+        if isinstance(self._df, pl.LazyFrame):
+            num_groups = self._df.select('dependent', 'predictor').unique().select(pl.len()).collect().item()
+        else:
+            num_groups = self._df.select('dependent', 'predictor').unique().height
+        logger.info(f"Running associations for {num_groups} predictor~dependent pairs.")
         if not quantitative:
             if binary_model == "firth":
                 reg_function = partial(
                     polars_firth_regression,
                     independents=independents,
                     dependent_values="dependent_value",
+                    num_groups=num_groups
                 )
                 start_time = time.perf_counter()
                 output = (
