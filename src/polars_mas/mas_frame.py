@@ -7,7 +7,7 @@ from pathlib import Path
 
 from loguru import logger
 from polars_mas.consts import male_specific_codes, female_specific_codes, phecode_defs
-from polars_mas.model_funcs import polars_firth_regression
+# from polars_mas.model_funcs import polars_firth_regression
 
 
 @pl.api.register_dataframe_namespace("polars_mas")
@@ -420,53 +420,53 @@ class MASFrame:
         num_groups: int
     ) -> pl.DataFrame | pl.LazyFrame:
         logger.info(f"Running associations for {num_groups} predictor~dependent pairs.")
-        if not quantitative:
-            if binary_model == "firth":
-                start_time = time.perf_counter()
-                reg_function = partial(
-                    polars_firth_regression,
-                    independents=independents,
-                    dependent_values="dependent_value",
-                    num_groups=num_groups, 
-                )
-                output = (
-                    self._df.group_by("dependent", "predictor")
-                    .agg(
-                        pl.col("model_struct")
-                        .map_batches(reg_function, return_dtype=pl.Struct, returns_scalar=True)
-                        .alias("result")
-                    )
-                    .unnest("result")
-                )
-                if is_phewas:
-                    # Add on the phecode definitions
-                    if isinstance(output, pl.LazyFrame):
-                        output = output.join(phecode_defs, left_on="dependent", right_on="phecode")
-                    else:
-                        output = output.join(
-                            phecode_defs.collect(), left_on="dependent", right_on="phecode"
-                        )
-            elif binary_model != "firth":
-                logger.warning(
-                    "Other implementations have not be made yet. Please use 'firth' for binary models."
-                )
-        else:
-            logger.error("Quantitative models have not been implemented yet.")
-            raise NotImplementedError
-        # All outputs will be named output
-        if isinstance(output, pl.LazyFrame):
-            logger.info("Collecting lazyframe results.")
-            output = output.collect()
-        output = (
-            output.fill_nan(None)
-            .select(
-                [pl.col("dependent"), pl.col("predictor"), pl.all().exclude(["dependent", "predictor"])]
-            )
-            .sort(["predictor", "pval"], nulls_last=True)
-        )
-        end_time = time.perf_counter()
-        logger.success(f"Associations Complete! Runtime: {str(datetime.timedelta(seconds=(round(end_time - start_time))))}")
-        return output
+        # if not quantitative:
+        #     if binary_model == "firth":
+        #         start_time = time.perf_counter()
+        #         reg_function = partial(
+        #             polars_firth_regression,
+        #             independents=independents,
+        #             dependent_values="dependent_value",
+        #             num_groups=num_groups, 
+        #         )
+        #         output = (
+        #             self._df.group_by("dependent", "predictor")
+        #             .agg(
+        #                 pl.col("model_struct")
+        #                 .map_batches(reg_function, return_dtype=pl.Struct, returns_scalar=True)
+        #                 .alias("result")
+        #             )
+        #             .unnest("result")
+        #         )
+        #         if is_phewas:
+        #             # Add on the phecode definitions
+        #             if isinstance(output, pl.LazyFrame):
+        #                 output = output.join(phecode_defs, left_on="dependent", right_on="phecode")
+        #             else:
+        #                 output = output.join(
+        #                     phecode_defs.collect(), left_on="dependent", right_on="phecode"
+        #                 )
+        #     elif binary_model != "firth":
+        #         logger.warning(
+        #             "Other implementations have not be made yet. Please use 'firth' for binary models."
+        #         )
+        # else:
+        #     logger.error("Quantitative models have not been implemented yet.")
+        #     raise NotImplementedError
+        # # All outputs will be named output
+        # if isinstance(output, pl.LazyFrame):
+        #     logger.info("Collecting lazyframe results.")
+        #     output = output.collect()
+        # output = (
+        #     output.fill_nan(None)
+        #     .select(
+        #         [pl.col("dependent"), pl.col("predictor"), pl.all().exclude(["dependent", "predictor"])]
+        #     )
+        #     .sort(["predictor", "pval"], nulls_last=True)
+        # )
+        # end_time = time.perf_counter()
+        # logger.success(f"Associations Complete! Runtime: {str(datetime.timedelta(seconds=(round(end_time - start_time))))}")
+        # return output
 
 
 @pl.api.register_expr_namespace("transforms")

@@ -1,7 +1,12 @@
+import multiprocessing as mp
 import polars as pl
 import polars_mas.mas_frame as pla
+from polars_mas.model_funcs import firth_regression_pool
 
 from pathlib import Path
+from functools import partial
+from tqdm import tqdm
+from loguru import logger
 
 
 def run_mas(
@@ -57,3 +62,56 @@ def run_mas(
         pred_df = output_df.filter(pl.col("predictor") == predictor)
         pred_df.write_csv(f"{output}_{predictor}.csv")
         # print(pred_df.head())
+
+def run_mas_mp(
+    input: Path,
+    output: Path,
+    separator: str,
+    predictors: list[str],
+    dependents: list[str],
+    covariates: list[str],
+    categorical_covariates: list[str],
+    null_values: list[str],
+    frame_type: str,
+    missing: str,
+    quantitative: bool,
+    transform: str,
+    min_cases: int,
+    linear_model: str,
+    binary_model: str,
+    **kwargs,
+) -> None:
+    if frame_type == "eager":
+        reader = pl.read_csv
+    elif frame_type == "lazy":
+        reader = pl.scan_csv
+    df = reader(input, separator=separator, null_values=null_values)
+    selected_columns = predictors + covariates + dependents
+    independents = predictors + covariates
+    preprocessed = (
+        df.select(selected_columns)
+        # preprocessing methods
+        .polars_mas.check_independents_for_constants(independents)
+        .polars_mas.validate_dependents(dependents, quantitative, min_cases)
+        .polars_mas.handle_missing_values(missing, covariates)
+        .polars_mas.category_to_dummy(
+            categorical_covariates, predictors, independents, covariates, dependents
+        )
+        .polars_mas.transform_continuous(transform, independents, categorical_covariates)
+    )
+    if isinstance(preprocessed, pl.LazyFrame):
+        preprocessed = preprocessed.collect()
+    # preprocessed = preprocessed.to_pandas()
+    logger.debug(f'Preprocessed Dataframe shape: {preprocessed.shape}, N-dependents: {len(dependents)}')
+    num_groups = len(predictors) * len(dependents)
+    
+    # results = []
+    # # pbar = tqdm(total=num_groups)
+    # start_time = time.time()
+    for predictor in predictors:
+        args = [(preprocessed, predictor, covariates, dependent, kwargs['phewas'], kwargs['phewas_sex_col'], num_groups) for dependent in dependents]
+        with mp.get_context('fork').Pool(8) as pool:
+            results = pool.starmap(firth_regression_pool, args)
+            # pass
+        output = pl.DataFrame(results)
+        logger.debug(f'Output: {output.head()}')

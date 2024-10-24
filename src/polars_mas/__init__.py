@@ -207,7 +207,7 @@ def _load_and_limit(threads: int, polars_threads: int) -> Callable:
     pla = import_module("polars_mas.mas_frame")
     polars_mas = import_module("polars_mas.main")
     threadpool_limits(limits=threads)
-    return polars_mas.run_mas
+    return polars_mas.run_mas_mp
 
 
 def _validate_args(args):
@@ -253,6 +253,11 @@ def _validate_args(args):
                 )
     else:
         args.categorical_covariates = []
+    # assert that covariates, predcitors and dependents are all unique
+    if len(set(args.covariates + args.predictors + args.dependents)) != len(
+        args.covariates + args.predictors + args.dependents
+    ):
+        raise ValueError("Predictors, dependents and covariates must be unique.")
 
     # Check that threads < polars_threads and that polars_threads <= os.cpu_count()
     if args.polars_threads > os.cpu_count():
