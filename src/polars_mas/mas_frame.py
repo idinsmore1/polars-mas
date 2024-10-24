@@ -455,6 +455,7 @@ class MASFrame:
             raise NotImplementedError
         # All outputs will be named output
         if isinstance(output, pl.LazyFrame):
+            logger.info("Collecting lazyframe results.")
             output = output.collect()
         output = (
             output.fill_nan(None)

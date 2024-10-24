@@ -93,7 +93,7 @@ wheels = [
 
 [[package]]
 name = "polars-mas"
-version = "0.1.61"
+version = "0.1.7"
 source = { editable = "." }
 dependencies = [
     { name = "firthlogist" },
