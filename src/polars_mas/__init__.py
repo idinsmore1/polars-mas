@@ -16,7 +16,13 @@ def multiple_association_study() -> None:
         description="Polars-MAS: A Python package for multiple association analysis."
     )
     parser.add_argument("-i", "--input", required=True, type=Path, help="Input file path.")
-    parser.add_argument("-o", "--output", required=True, type=Path, help="Output file prefix. Will be suffixed with '{predictor}.csv'.")
+    parser.add_argument(
+        "-o",
+        "--output",
+        required=True,
+        type=Path,
+        help="Output file prefix. Will be suffixed with '{predictor}.csv'.",
+    )
     parser.add_argument(
         "-p",
         "--predictors",
@@ -177,11 +183,11 @@ def _log_args(args):
     log = "Input arguments:\n"
     for key, value in vars(args).items():
         print_val = value
-        if key in ['dependents', 'covariates', 'predictors', 'categorical_covariates']:
+        if key in ["dependents", "covariates", "predictors", "categorical_covariates"]:
             if len(value) > 5:
                 print_val = f"{','.join(value[:2])}...{','.join(value[-2:])} - ({len(value)} total)"
             else:
-                print_val = ','.join(value)
+                print_val = ",".join(value)
         log += f"\t{key}: {print_val}\n"
     logger.info(log)
 
@@ -266,6 +272,7 @@ def _validate_args(args):
         )
         args.threads = 4
 
+
 ########### Validation functions ############
 def _load_input_header(input_file: Path, separator: str) -> list[str]:
     with input_file.open() as f:
@@ -327,7 +334,7 @@ def setup_logger(output: Path, verbose: bool):
     else:
         stdout_level = "INFO"
         stderr_level = "ERROR"
-    logger.level('PROGRESS', no=23, color="<cyan>", icon="🕐")
+    logger.level("PROGRESS", no=23, color="<cyan>", icon="🕐")
     logger.add(
         sys.stdout,
         colorize=True,
