@@ -186,7 +186,6 @@ def _log_args(args):
                 print_val = ",".join(value)
         log += f"\t{color}{key}\033[0m: {print_val}\n"
     logger.opt(ansi=True).info(log)
-    quit()
 
 
 def _load_and_limit(threads: int, num_workers: int) -> Callable:
