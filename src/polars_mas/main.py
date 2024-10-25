@@ -43,6 +43,12 @@ def run_mas(
         is_phewas=kwargs["phewas"],
         phewas_sex_col=kwargs["phewas_sex_col"],
     )
+    # print(preprocessed)
+    # print(independents)
+    # print(predictors)
+    # print(covariates)
+    # print(dependents)
+    # quit()
     assoc_kwargs = {
         "predictors": predictors,
         "covariates": covariates,

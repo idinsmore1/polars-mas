@@ -80,9 +80,10 @@ def run_association_test(
     x = df.select([predictor, *covariates])
     y = df.get_column(dependent).to_numpy()
     # If this is a PheWAS analysis, sex is a covariate, and the dependent is sex-specific, remove it from the analysis
-    if is_phewas:
-        if sex_col in x.collect_schema().names() and dependent in sex_specific_codes:
-            x = x.select(pl.all().exclude(sex_col))
+    # col_names = x.collect_schema().names()
+    # if is_phewas:
+    #     if sex_col in col_names and dependent in sex_specific_codes:
+    #         x = df.select(pl.col(col_names).exclude(sex_col))
     non_consts = x.polars_mas.check_grouped_independents_for_constants(
         [predictor, *covariates], dependent
     )
