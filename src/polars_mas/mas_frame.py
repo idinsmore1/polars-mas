@@ -7,7 +7,7 @@ from pathlib import Path
 
 from loguru import logger
 from polars_mas.consts import male_specific_codes, female_specific_codes, phecode_defs
-from polars_mas.model_funcs import run_firth_regression
+from polars_mas.model_funcs import run_association_tests
 
 
 @pl.api.register_dataframe_namespace("polars_mas")
@@ -15,6 +15,33 @@ from polars_mas.model_funcs import run_firth_regression
 class MASFrame:
     def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._df = df
+
+    def preprocess(
+        self,
+        selected_columns,
+        independents,
+        predictors,
+        covariates,
+        dependents,
+        categorical_covariates,
+        missing,
+        quantitative,
+        transform,
+        min_cases,
+    ):
+        preprocessed = (
+            self._df.select(selected_columns)
+            .polars_mas.check_independents_for_constants(independents)
+            .polars_mas.validate_dependents(dependents, quantitative, min_cases)
+            .polars_mas.handle_missing_values(missing, covariates)
+            .polars_mas.category_to_dummy(
+                categorical_covariates, predictors, independents, covariates, dependents
+            )
+            .polars_mas.transform_continuous(transform, independents, categorical_covariates)
+            # .collect()
+            # .lazy()
+        )
+        return preprocessed, independents, predictors, covariates, dependents
 
     def check_independents_for_constants(self, independents: list[str], drop=False) -> pl.LazyFrame:
         """
@@ -277,55 +304,6 @@ class MASFrame:
             return self._df.with_columns(pl.col(continuous_independents).transforms.min_max())
         return self._df
 
-    def melt(
-        self, predictors: list[str], independents: list[str], dependents: list[str]
-    ) -> pl.DataFrame | pl.LazyFrame:
-        """
-        Transforms the DataFrame by melting specified columns into a long format suitable for modeling.
-
-        Args:
-            predictors (list[str]): List of predictor column names to be melted.
-            independents (list[str]): List of independent column names to be retained.
-            dependents (list[str]): List of dependent column names to be melted.
-
-        Returns:
-            pl.DataFrame | pl.LazyFrame: A DataFrame or LazyFrame with the melted structure, including a new column 'model_struct'
-            that contains a struct of predictor, predictor_value, covariates, dependent, and dependent_value.
-
-        Notes:
-            - The method first unpivots the DataFrame on the dependent columns, then drops any rows with null values in the
-              'dependent_value' column.
-            - It then unpivots the DataFrame again on the predictor columns.
-            - A new column 'model_struct' is created, which is a struct containing the predictor, predictor_value, covariates,
-              dependent, and dependent_value.
-            - The 'independents' list is modified in place to include 'predictor_value' and covariates.
-        """
-        covars = [col for col in independents if col not in predictors]
-        melted_df = (
-            self._df.unpivot(
-                index=independents,
-                on=dependents,
-                variable_name="dependent",
-                value_name="dependent_value",
-            )
-            .drop_nulls(subset=["dependent_value"])
-            .unpivot(
-                index=covars + ["dependent", "dependent_value"],
-                on=predictors,
-                variable_name="predictor",
-                value_name="predictor_value",
-            )
-            .drop_nulls(subset=["predictor_value"])
-            .with_columns(
-                pl.struct("predictor", "predictor_value", *covars, "dependent", "dependent_value").alias(
-                    "model_struct"
-                )
-            )
-        )
-        independents.clear()
-        independents.extend(["predictor_value", *covars])
-        return melted_df
-
     def phewas_filter(self, is_phewas: bool, sex_col: str, drop: True) -> pl.LazyFrame:
         if not is_phewas:
             return self._df
@@ -349,42 +327,46 @@ class MASFrame:
 
     def run_associations(
         self,
-        output_path: Path,
-        independents: list[str],
         predictors: list[str],
         covariates: list[str],
         dependents: list[str],
-        quantitative: bool,
-        binary_model: str,
-        linear_model: str,
+        model: str,
         is_phewas: bool,
     ) -> pl.DataFrame:
         num_groups = len(predictors) * len(dependents)
-        logger.info(f"Running associations for {len(predictors)} predictors over {len(dependents)} dependents.")
-        reg_func = partial(run_firth_regression, num_groups=num_groups)
+        s_p = "s" if len(predictors) > 1 else ""
+        s_d = "s" if len(dependents) > 1 else ""
+        logger.info(
+            f"Running associations for {len(predictors)} predictor{s_p} over {len(dependents)} dependent{s_d}."
+        )
+        reg_func = partial(run_association_tests, model_type=model, num_groups=num_groups)
         reg_frame = self._df.collect().lazy()
         result_frame = pl.DataFrame()
         for predictor in predictors:
             res_list = []
             for dependent in dependents:
                 lazy_df = (
-                    reg_frame
-                    .select(
+                    reg_frame.select(
                         pl.col([predictor, *covariates, dependent]),
-                        pl.struct([predictor, *covariates, dependent]).alias('model_struct')
+                        pl.struct([predictor, *covariates, dependent]).alias("model_struct"),
                     )
-                    # .drop_nulls([predictor, dependent])
+                    .drop_nulls([predictor, dependent])
                     .select(
-                        pl.col('model_struct')
+                        pl.col("model_struct")
                         .map_batches(reg_func, returns_scalar=True, return_dtype=pl.Struct)
-                        .alias('result')
+                        .alias("result")
                     )
                 )
                 res_list.append(lazy_df)
             results = pl.collect_all(res_list)
-            output = pl.concat([result.unnest('result') for result in results]).sort('pval')
+            output = pl.concat([result.unnest("result") for result in results]).sort("pval")
             result_frame = pl.concat([result_frame, output])
+        print(output)
         # output.write_csv(f'{output_path}_{predictor}.csv')
+        if is_phewas:
+            result_frame = result_frame.join(phecode_defs, left_on="dependent", right_on="phecode").sort(
+                ["predictor", "pval"]
+            )
         return result_frame
 
 

@@ -97,7 +97,7 @@ def multiple_association_study() -> None:
         help="Dependent variables are quantitative traits.",
     )
     parser.add_argument(
-        "-m",
+        "-mi",
         "--missing",
         type=str,
         choices=["drop", "forward", "backward", "min", "max", "mean", "zero", "one"],
@@ -120,19 +120,11 @@ def multiple_association_study() -> None:
         default=20,
     )
     parser.add_argument(
-        "-lm",
-        "--linear-model",
+        "-m",
+        "--model",
         type=str,
-        choices=["lm", "glm"],
-        help="Type of linear model to fit. Default is lm.",
-        default="lm",
-    )
-    parser.add_argument(
-        "-bm",
-        "--binary-model",
-        type=str,
-        choices=["firth", "logistic"],
-        help="Type of binary model to fit. Default is firth logistic regression.",
+        choices=["firth", "logistic", "linear", "glm"],
+        help="Type of model to fit. Default is firth logistic regression.",
         default="firth",
     )
     parser.add_argument(
@@ -145,15 +137,6 @@ def multiple_association_study() -> None:
         type=str,
         help="Sex covariate column name for PheWAS analysis. Default = 'sex'. Must be coded as male = 0 and female = 1.",
         default="sex",
-    )
-    # Stuff for polars and numpy
-    parser.add_argument(
-        "-fr",
-        "--frame-type",
-        type=str,
-        choices=["lazy", "eager"],
-        help="Type of Polars Frame to use. Defaults to lazy.",
-        default="lazy",
     )
     parser.add_argument(
         "-th",
@@ -259,6 +242,11 @@ def _validate_args(args):
                 )
     else:
         args.categorical_covariates = []
+
+    if args.quantitative and args.model in ["logistic", "firth"]:
+        raise ValueError("Quantitative traits cannot be used with logistic or firth models.")
+    elif not args.quantitative and args.model in ['linear', 'glm']:
+        raise ValueError("Quantitative traits must be used with logistic or firth models.")
 
     # Check that threads < polars_threads and that polars_threads <= os.cpu_count()
     if args.polars_threads > os.cpu_count():
