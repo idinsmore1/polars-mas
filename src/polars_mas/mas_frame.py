@@ -15,19 +15,23 @@ class MASFrame:
 
     def preprocess(
         self,
-        selected_columns,
-        independents,
-        predictors,
-        covariates,
-        dependents,
-        categorical_covariates,
-        missing,
-        quantitative,
-        transform,
-        min_cases,
+        selected_columns: list[str],
+        independents: list[str],
+        predictors: list[str],
+        covariates: list[str],
+        dependents: list[str],
+        categorical_covariates: list[str],
+        missing: str,
+        quantitative: bool,
+        transform: str,
+        min_cases: int,
+        is_phewas: bool,
+        phewas_sex_col: str
     ):
         preprocessed = (
-            self._df.select(selected_columns)
+            self._df
+            .polars_mas.phewas_check(is_phewas, phewas_sex_col)
+            .select(selected_columns)
             .polars_mas.check_independents_for_constants(independents)
             .polars_mas.validate_dependents(dependents, quantitative, min_cases)
             .polars_mas.handle_missing_values(missing, covariates)
@@ -35,8 +39,8 @@ class MASFrame:
                 categorical_covariates, predictors, independents, covariates, dependents
             )
             .polars_mas.transform_continuous(transform, independents, categorical_covariates)
-            # .collect()
-            # .lazy()
+            .collect()
+            .lazy()
         )
         return preprocessed, independents, predictors, covariates, dependents
 
@@ -96,8 +100,14 @@ class MASFrame:
             .select(pl.col("column"))
         )["column"].to_list()
         if const_cols:
+            if len(const_cols) > 1:
+                predicate = "are"
+                plural = "s"
+            else:
+                predicate = "is"
+                plural = ""
             logger.warning(
-                f'Columns {",".join(const_cols)} are constants. Dropping from {dependent} analysis.'
+                f'Column{plural} {",".join(const_cols)} {predicate} constant{plural}. Dropping from {dependent} analysis.'
             )
             non_consts = [col for col in independents if col not in const_cols]
             return non_consts
@@ -301,26 +311,68 @@ class MASFrame:
             return self._df.with_columns(pl.col(continuous_independents).transforms.min_max())
         return self._df
 
-    def phewas_filter(self, is_phewas: bool, sex_col: str, drop: True) -> pl.LazyFrame:
+    def phewas_check(self, is_phewas: bool, sex_col: str) -> pl.LazyFrame:
         if not is_phewas:
             return self._df
-        sex_specific_codes = male_specific_codes + female_specific_codes
-        if sex_col not in self._df.collect_schema().names():
-            start_phrase = f"Column {sex_col} not found in PheWAS dataframe."
-            if not drop:
-                logger.error(f"{start_phrase} Please provide the correct column name.")
-                raise ValueError
-            logger.warning(f"{start_phrase} Sex specific phecodes will be dropped.")
-            return self._df.filter(~pl.col("dependent").is_in(sex_specific_codes))
-        # Otherwise, filter
-        condition = (
-            # Keep rows where sex is not male (1) OR phecode is not in female_specific_phecodes
-            ((pl.col(sex_col) != 0) | ~pl.col("dependent").is_in(female_specific_codes))
-            &
-            # AND keep rows where sex is not female (0) OR phecode is not in male_specific_phecodes
-            ((pl.col(sex_col) != 1) | ~pl.col("dependent").is_in(male_specific_codes))
+        col_names = self._df.collect_schema().names()
+        if sex_col not in col_names:
+            logger.error(f"Column {sex_col} not found in PheWAS dataframe. Please provide the correct sex column name.")
+            raise ValueError(f"Column {sex_col} not found in PheWAS dataframe. Please provide the correct sex column name.")
+        male_codes_in_df = [col for col in col_names if col in male_specific_codes]
+        female_codes_in_df = [col for col in col_names if col in female_specific_codes]
+        pre_counts = (
+           self._df
+           .select([*male_codes_in_df, *female_codes_in_df])
+           .count()
+           .collect()
+           .transpose(
+               include_header=True,
+               header_name='phecode',
+               column_names=['count']
+               # column_names=["phecode", "count"]
+           )
         )
-        return self._df.filter(condition)
+        print(pre_counts)
+        code_matched = (
+            self._df
+            .with_columns([
+                pl.when(pl.col(sex_col) == 1)  # Females should always be coded as 1
+                .then(None)  # We want these to be not included in analysis
+                .otherwise(pl.col(male_code))
+                .alias(male_code)
+                for male_code in male_codes_in_df
+            ])
+            .with_columns([
+                pl.when(pl.col(sex_col) == 0)  # Males should always be coded as 0
+                .then(None)  # We want these to be not included in analysis
+                .otherwise(pl.col(female_code))
+                .alias(female_code)
+                for female_code in female_codes_in_df
+            ])
+        )
+        post_counts = (
+            code_matched
+            .select([*male_codes_in_df, *female_codes_in_df])
+            .count()
+            .collect()
+            .transpose(
+                include_header=True,
+                header_name='phecode',
+                column_names=['count']
+            )
+        )
+        changed = (
+            pre_counts
+            .join(post_counts, on="phecode", how="inner", suffix="_post")
+            .filter(pl.col("count") != pl.col("count_post"))
+            .get_column("phecode")
+            .to_list()
+        )
+        if changed:
+            logger.warning(f"{len(changed)} PheWAS sex-specific codes have mismatched sex values. See log file for details.")
+            logger.debug(f"Female specific codes with mismatched sex values: {[col for col in changed if col in female_codes_in_df]}")
+            logger.debug(f'Male specific codes with mismatched sex values: {[col for col in changed if col in male_codes_in_df]}')
+        return code_matched
 
     def run_associations(
         self,

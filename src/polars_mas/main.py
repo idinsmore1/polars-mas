@@ -36,6 +36,8 @@ def run_mas(
         quantitative,
         transform,
         min_cases,
+        is_phewas=kwargs['phewas'],
+        phewas_sex_col=kwargs['phewas_sex_col']
     )
     assoc_kwargs = {
         "predictors": predictors,

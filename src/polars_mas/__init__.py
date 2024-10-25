@@ -206,7 +206,6 @@ def _validate_args(args):
         raise FileNotFoundError(f"Output directory not found: {args.output.parent}")
     # Load in the header of the input file to check passed columns
     file_col_names = _load_input_header(args.input, args.separator)
-    logger.info(f"{len(file_col_names)} columns found in input file.")
     # Check predictor
     if any([predictor not in file_col_names for predictor in args.predictors]):
         raise ValueError(f"Predictor column '{args.predictors}' not found in input columns.")
@@ -313,11 +312,11 @@ def setup_logger(output: Path, verbose: bool):
     logger.add(
         log_file_path,
         format="{time: DD-MM-YYYY -> HH:mm} | {level} | {message}",
-        level="INFO",
+        level="DEBUG",
         enqueue=True,
     )
     if verbose:
-        stdout_level = "DEBUG"
+        stdout_level = "INFO"
         stderr_level = "WARNING"
     else:
         stdout_level = "INFO"
