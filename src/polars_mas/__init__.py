@@ -2,14 +2,13 @@ import os
 import sys
 import argparse
 
-# import polars as pl
-from loguru import logger
-from pathlib import Path
-from threadpoolctl import threadpool_limits
-from typing import Callable
-from importlib import import_module
-from pprint import pprint
 
+from importlib import import_module
+from itertools import cycle
+from pathlib import Path
+from typing import Callable
+from loguru import logger
+from threadpoolctl import threadpool_limits
 
 def multiple_association_study() -> None:
     parser = argparse.ArgumentParser(
@@ -123,7 +122,7 @@ def multiple_association_study() -> None:
         "-m",
         "--model",
         type=str,
-        choices=["firth", "logistic", "linear", "glm"],
+        choices=["firth", "linear"],
         help="Type of model to fit. Default is firth logistic regression.",
         default="firth",
     )
@@ -146,17 +145,17 @@ def multiple_association_study() -> None:
         default=1,
     )
     parser.add_argument(
-        "-pt",
-        "--polars-threads",
+        "-n",
+        "--num-workers",
         type=int,
-        help="Number of threads for polars to use. Defaults to all threads on machine.",
+        help="Number of workers for parallel processing and threads available to Polars. Default is number of CPUs.",
         default=os.cpu_count(),
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="have more verbose logging")
     args = parser.parse_args()
     setup_logger(args.output, args.verbose)
     _validate_args(args)
-    run_mas = _load_and_limit(args.threads, args.polars_threads)
+    run_mas = _load_and_limit(args.threads, args.num_workers)
     _log_args(args)
     # Run Aurora
     run_mas(**vars(args))
@@ -164,18 +163,33 @@ def multiple_association_study() -> None:
 
 def _log_args(args):
     log = "Input arguments:\n"
-    for key, value in vars(args).items():
+    skip_keys = [
+        'dependents_indices',
+        'covariates_indicies',
+        'null_values',
+    ]
+    colors = cycle([
+        '\033[4;32m',  # green
+        '\033[4;33m',  # yellow
+        '\033[4;36m',  # cyan
+        '\033[4;31m'   # red
+    ])
+    val_dict = {k: v for k, v in vars(args).items() if k not in skip_keys}
+    for (key, value), color in zip(val_dict.items(), colors):
+        if key in skip_keys:
+            continue
         print_val = value
         if key in ["dependents", "covariates", "predictors", "categorical_covariates"]:
             if len(value) > 5:
                 print_val = f"{','.join(value[:2])}...{','.join(value[-2:])} - ({len(value)} total)"
             else:
                 print_val = ",".join(value)
-        log += f"\t{key}: {print_val}\n"
-    logger.info(log)
+        log += f"\t{color}{key}\033[0m: {print_val}\n"
+    logger.opt(ansi=True).info(log)
+    quit()
 
 
-def _load_and_limit(threads: int, polars_threads: int) -> Callable:
+def _load_and_limit(threads: int, num_workers: int) -> Callable:
     """
     Configures the environment and imports necessary modules for Aurora.
 
@@ -186,17 +200,17 @@ def _load_and_limit(threads: int, polars_threads: int) -> Callable:
 
     Args:
         threads (int): The maximum number of threads to be used by the thread pool.
-        polars_threads (int): The maximum number of threads to be used by the Polars library.
+        num_workers (int): The maximum number of threads to be used by the Polars library.
 
     Returns:
         the aurora function from the main logic module.
     """
-    os.environ["POLARS_MAX_THREADS"] = str(polars_threads)
-    pl = import_module("polars")
-    pla = import_module("polars_mas.mas_frame")
-    polars_mas = import_module("polars_mas.main")
+    os.environ["POLARS_MAX_THREADS"] = str(num_workers)
+    import_module("polars")
+    import_module("polars_mas.mas_frame")
+    _main = import_module("polars_mas.main")
     threadpool_limits(limits=threads)
-    return polars_mas.run_mas
+    return _main.run_mas
 
 
 def _validate_args(args):
@@ -230,7 +244,7 @@ def _validate_args(args):
     else:
         args.covariates = []
 
-    ## Check categorical covariates
+    # Check categorical covariates
     if args.categorical_covariates and not args.covariates:
         raise ValueError("Categorical covariates specified without specifying covariates")
     elif args.categorical_covariates:
@@ -242,17 +256,17 @@ def _validate_args(args):
     else:
         args.categorical_covariates = []
 
-    if args.quantitative and args.model in ["logistic", "firth"]:
+    if args.quantitative and args.model in ["firth"]:
         raise ValueError("Quantitative traits cannot be used with logistic or firth models.")
-    elif not args.quantitative and args.model in ['linear', 'glm']:
+    elif not args.quantitative and args.model in ["linear"]:
         raise ValueError("Quantitative traits must be used with logistic or firth models.")
 
     # Check that threads < polars_threads and that polars_threads <= os.cpu_count()
-    if args.polars_threads > os.cpu_count():
+    if args.num_workers > os.cpu_count():
         logger.warning(
-            f"Number of Polars threads ({args.polars_threads}) exceeds number of available CPUs ({os.cpu_count()}). Setting Polars threads to {os.cpu_count()}."
+            f"Number of worker threads ({args.num_workers}) exceeds number of available CPUs ({os.cpu_count()}). Setting worker threads to {os.cpu_count()}."
         )
-        args.polars_threads = os.cpu_count()
+        args.num_workers = os.cpu_count()
     if args.threads > os.cpu_count():
         logger.warning(
             f"Number of computation threads ({args.threads}) exceeds number of available CPUs ({os.cpu_count()}). Setting threads to 4."
@@ -322,9 +336,10 @@ def setup_logger(output: Path, verbose: bool):
         stdout_level = "INFO"
         stderr_level = "ERROR"
     logger.level("PROGRESS", no=23, color="<cyan>", icon="🕐")
+    logger.level("IMPORTANT", no=25, color="<yellow>", icon="⚠️")
     logger.add(
         sys.stdout,
-        colorize=True,
+        # colorize=True,
         format="<green>{time: DD-MM-YYYY -> HH:mm:ss}</green> <level>{message}</level>",
         level=stdout_level,
         filter=lambda record: record["level"].name not in ["WARNING", "ERROR"],
@@ -332,7 +347,7 @@ def setup_logger(output: Path, verbose: bool):
     )
     logger.add(
         sys.stderr,
-        colorize=True,
+        # colorize=True,
         format="<red>{time: DD-MM-YYYY -> HH:mm:ss}</red> <level>{message}</level>",
         level=stderr_level,
         filter=lambda record: record["level"].name not in ["DEBUG", "INFO", "SUCCESS"],

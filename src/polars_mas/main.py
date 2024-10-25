@@ -1,7 +1,11 @@
+import datetime
+import time
+
 import polars as pl
 import polars_mas.mas_frame as pla  # This sets up the polars_mas namespace
 
 from pathlib import Path
+from loguru import logger
 
 
 def run_mas(
@@ -20,11 +24,11 @@ def run_mas(
     model: str,
     **kwargs,
 ) -> None:
-
-    df = pl.scan_csv(input, separator=separator, null_values=null_values)
+    start = time.perf_counter()
     selected_columns = predictors + covariates + dependents
     independents = predictors + covariates
     # Preprocess the data, will update the lists of predictors, covariates, and dependents in place
+    df = pl.scan_csv(input, separator=separator, null_values=null_values)
     preprocessed, independents, predictors, covariates, dependents = df.polars_mas.preprocess(
         selected_columns,
         independents,
@@ -36,8 +40,8 @@ def run_mas(
         quantitative,
         transform,
         min_cases,
-        is_phewas=kwargs['phewas'],
-        phewas_sex_col=kwargs['phewas_sex_col']
+        is_phewas=kwargs["phewas"],
+        phewas_sex_col=kwargs["phewas_sex_col"],
     )
     assoc_kwargs = {
         "predictors": predictors,
@@ -45,8 +49,13 @@ def run_mas(
         "dependents": dependents,
         "model": model,
         "is_phewas": kwargs["phewas"],
+        "sex_col": kwargs["phewas_sex_col"],
     }
     output_df = preprocessed.polars_mas.run_associations(**assoc_kwargs)
     for predictor in predictors:
         pred_df = output_df.filter(pl.col("predictor") == predictor)
         pred_df.write_csv(f"{output}_{predictor}.csv")
+    end = time.perf_counter()
+    logger.success(
+        f"Associations Complete! Runtime: {str(datetime.timedelta(seconds=(round(end - start))))}"
+    )

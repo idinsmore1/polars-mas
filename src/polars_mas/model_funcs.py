@@ -37,7 +37,9 @@ def _update_progress() -> None:
         logger.log("PROGRESS", f"Completed: [{num_completed}/{NUM_GROUPS}] - {cpu_time_per_block:.2f}s")
 
 
-def run_association_tests(model_struct: pl.Struct, model_type: str, num_groups: int):
+def run_association_test(
+    model_struct: pl.Struct, model_type: str, num_groups: int, is_phewas: bool, sex_col: str
+) -> dict:
     global NUM_GROUPS
     NUM_GROUPS = num_groups
     output_struct = {
@@ -77,6 +79,10 @@ def run_association_tests(model_struct: pl.Struct, model_type: str, num_groups: 
     # df = df.drop_nulls([predictor, dependent])
     x = df.select([predictor, *covariates])
     y = df.get_column(dependent).to_numpy()
+    # If this is a PheWAS analysis, sex is a covariate, and the dependent is sex-specific, remove it from the analysis
+    if is_phewas:
+        if sex_col in x.collect_schema().names() and dependent in sex_specific_codes:
+            x = x.select(pl.all().exclude(sex_col))
     non_consts = x.polars_mas.check_grouped_independents_for_constants(
         [predictor, *covariates], dependent
     )
@@ -127,6 +133,7 @@ def firth_regression(x: pl.DataFrame, y: np.ndarray) -> dict:
         "ci_low": fl.ci_[0][0],
         "ci_high": fl.ci_[0][1],
     }
+
 
 def logistic_regression(x: pl.DataFrame, y: np.ndarray) -> dict:
     """
@@ -184,6 +191,7 @@ def linear_regression(x: pl.DataFrame, y: np.ndarray) -> dict:
         "beta": model.params[0],
         "se": model.bse[0],
     }
+
 
 def _get_counts(y):
     """
