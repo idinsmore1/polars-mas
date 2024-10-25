@@ -7,7 +7,7 @@ from pathlib import Path
 
 from loguru import logger
 from polars_mas.consts import male_specific_codes, female_specific_codes, phecode_defs
-from polars_mas.model_funcs import polars_firth_regression, run_firth_regression
+from polars_mas.model_funcs import run_firth_regression
 
 
 @pl.api.register_dataframe_namespace("polars_mas")
@@ -352,6 +352,7 @@ class MASFrame:
         output_path: Path,
         independents: list[str],
         predictors: list[str],
+        covariates: list[str],
         dependents: list[str],
         quantitative: bool,
         binary_model: str,
@@ -359,32 +360,32 @@ class MASFrame:
         is_phewas: bool,
     ) -> pl.DataFrame:
         num_groups = len(predictors) * len(dependents)
-        logger.info(f"Running associations for {num_groups} predictor~dependent pairs.")
+        logger.info(f"Running associations for {len(predictors)} predictors over {len(dependents)} dependents.")
         reg_func = partial(run_firth_regression, num_groups=num_groups)
-        res_list = []
         reg_frame = self._df.collect().lazy()
+        result_frame = pl.DataFrame()
         for predictor in predictors:
-            logger.info(f"Testing {predictor}")
+            res_list = []
             for dependent in dependents:
                 lazy_df = (
                     reg_frame
                     .select(
-                        pl.col([*independents, dependent]),
-                        pl.struct([*independents, dependent]).alias('model_struct')
+                        pl.col([predictor, *covariates, dependent]),
+                        pl.struct([predictor, *covariates, dependent]).alias('model_struct')
                     )
-                    .drop_nulls([predictor, dependent])
+                    # .drop_nulls([predictor, dependent])
                     .select(
                         pl.col('model_struct')
                         .map_batches(reg_func, returns_scalar=True, return_dtype=pl.Struct)
                         .alias('result')
                     )
-                    .lazy()
-
                 )
                 res_list.append(lazy_df)
-        results = pl.collect_all(res_list)
-        output = pl.concat([result.unnest('result') for result in results])
-        return output
+            results = pl.collect_all(res_list)
+            output = pl.concat([result.unnest('result') for result in results]).sort('pval')
+            result_frame = pl.concat([result_frame, output])
+        # output.write_csv(f'{output_path}_{predictor}.csv')
+        return result_frame
 
 
 @pl.api.register_expr_namespace("transforms")
