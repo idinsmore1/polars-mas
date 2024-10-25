@@ -60,7 +60,8 @@ def run_association_tests(model_struct: pl.Struct, model_type: str, num_groups: 
             del output_struct[key]
         reg_func = linear_regression
     elif model_type == "logistic":
-        raise ValueError("Logistic regression not supported.")
+        # reg_func = logistic_regression
+        raise ValueError("Logistic regression not yet implemented.")
     elif model_type == "firth":
         reg_func = firth_regression
     else:
@@ -127,12 +128,29 @@ def firth_regression(x: pl.DataFrame, y: np.ndarray) -> dict:
         "ci_high": fl.ci_[0][1],
     }
 
+def logistic_regression(x: pl.DataFrame, y: np.ndarray) -> dict:
+    """
+    Run logistic regression on the given data.
 
-def linear_regression(x: pl.DataFrame, y: np.ndarray) -> dict:
-    total_counts = y.shape[0]
+    Parameters
+    ----------
+    x : polars.DataFrame
+        The independent variables.
+    y : np.ndarray
+        The dependent variable.
+
+    Returns
+    -------
+    dict
+        The results of the regression, including total number of observations,
+        p-value, beta coefficient, and standard error.
+    """
+    cases, controls, total_counts = _get_counts(y)
     x = sm.add_constant(x, prepend=False)
-    model = sm.OLS(y, x).fit()
+    model = sm.Logit(y, x).fit(maxiter=1000)
     return {
+        "cases": cases,
+        "controls": controls,
         "total_n": total_counts,
         "pval": model.pvalues[0],
         "beta": model.params[0],
@@ -140,7 +158,47 @@ def linear_regression(x: pl.DataFrame, y: np.ndarray) -> dict:
     }
 
 
+def linear_regression(x: pl.DataFrame, y: np.ndarray) -> dict:
+    """
+    Run linear regression on the given data.
+
+    Parameters
+    ----------
+    x : polars.DataFrame
+        The independent variables.
+    y : np.ndarray
+        The dependent variable.
+
+    Returns
+    -------
+    dict
+        The results of the regression, including total number of observations,
+        p-value, beta coefficient, and standard error.
+    """
+    total_counts = y.shape[0]
+    x = sm.add_constant(x, prepend=False)
+    model = sm.OLS(y, x).fit(maxiter=1000)
+    return {
+        "total_n": total_counts,
+        "pval": model.pvalues[0],
+        "beta": model.params[0],
+        "se": model.bse[0],
+    }
+
 def _get_counts(y):
+    """
+    Calculate the number of cases and controls from the dependent variable.
+
+    Parameters
+    ----------
+    y : np.ndarray
+        The dependent variable.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the number of cases, controls, and total counts.
+    """
     cases = y.sum().astype(int)
     total_counts = y.shape[0]
     controls = total_counts - cases

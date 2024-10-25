@@ -1,9 +1,6 @@
 import polars as pl
-import time
-import datetime
 
 from functools import partial
-from pathlib import Path
 
 from loguru import logger
 from polars_mas.consts import male_specific_codes, female_specific_codes, phecode_defs
@@ -58,7 +55,7 @@ class MASFrame:
                                    If False, an error will be raised if constant columns are found.
                                    Defaults to False.
             dependent str: dependent variable being tested (useful when running regression for logging).
-                           adds an additional log if columns are dropped.
+                           adds a log if columns are dropped.
 
         Returns:
             pl.DataFrame | pl.LazyFrame: The DataFrame with constant columns dropped if `drop` is True,
@@ -259,13 +256,13 @@ class MASFrame:
             # Update the lists in place to keep track of the independents and covariates
             independents.clear()
             independents.extend([col for col in dummy_cols if col not in dependents])
-            original_covars = [col for col in covariates]  # Make a copy for categorical knowledge
+            original_covariates = [col for col in covariates]  # Make a copy for categorical knowledge
             covariates.clear()
             covariates.extend([col for col in independents if col not in predictors])
-            binary_covars = [col for col in categorical_covariates if col not in not_binary]
-            new_binary_covars = [col for col in covariates if col not in original_covars]
+            binary_covariates = [col for col in categorical_covariates if col not in not_binary]
+            new_binary_covariates = [col for col in covariates if col not in original_covariates]
             categorical_covariates.clear()
-            categorical_covariates.extend(binary_covars + new_binary_covars)
+            categorical_covariates.extend(binary_covariates + new_binary_covariates)
             return dummy.lazy()
         return self._df
 
@@ -361,7 +358,6 @@ class MASFrame:
             results = pl.collect_all(res_list)
             output = pl.concat([result.unnest("result") for result in results]).sort("pval")
             result_frame = pl.concat([result_frame, output])
-        print(output)
         # output.write_csv(f'{output_path}_{predictor}.csv')
         if is_phewas:
             result_frame = result_frame.join(phecode_defs, left_on="dependent", right_on="phecode").sort(
