@@ -8,8 +8,9 @@ pip install polars-mas
 ```
 
 ## Running the CLI
-```bash
+```text
 polars-mas --help
+
 Polars-MAS: A Python package for multiple association analysis.
 
 options:
