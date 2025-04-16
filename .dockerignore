@@ -1,0 +1,5 @@
+.venv/
+dist/
+.ruff_cache/
+src/tmp/
+src/tests/example_data/

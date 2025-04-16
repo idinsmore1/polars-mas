@@ -138,6 +138,11 @@ def multiple_association_study() -> None:
         default="sex",
     )
     parser.add_argument(
+        "--flipwas",
+        action="store_true",
+        help="Run PheWAS flipped where predictor is the outcome of testing all phecodes."
+    ),
+    parser.add_argument(
         "-th",
         "--threads",
         type=int,
@@ -352,7 +357,3 @@ def setup_logger(output: Path, verbose: bool):
         filter=lambda record: record["level"].name not in ["DEBUG", "INFO", "SUCCESS"],
         enqueue=True,
     )
-
-
-if __name__ == "__main__":
-    multiple_association_study()

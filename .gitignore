@@ -11,3 +11,5 @@ test_aorta.sh
 results/
 example_data/*.csv
 *.log
+.ruff_cache/
+dist/

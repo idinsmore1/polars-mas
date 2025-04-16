@@ -43,12 +43,6 @@ def run_mas(
         is_phewas=kwargs["phewas"],
         phewas_sex_col=kwargs["phewas_sex_col"],
     )
-    # print(preprocessed)
-    # print(independents)
-    # print(predictors)
-    # print(covariates)
-    # print(dependents)
-    # quit()
     assoc_kwargs = {
         "predictors": predictors,
         "covariates": covariates,
@@ -56,10 +50,15 @@ def run_mas(
         "model": model,
         "is_phewas": kwargs["phewas"],
         "sex_col": kwargs["phewas_sex_col"],
+        "flipwas": kwargs["flipwas"]
     }
     output_df = preprocessed.polars_mas.run_associations(**assoc_kwargs)
     for predictor in predictors:
-        pred_df = output_df.filter(pl.col("predictor") == predictor)
+        if kwargs["flipwas"]:
+            filter_col = "dependent"
+        else:
+            filter_col = "predictor"
+        pred_df = output_df.filter(pl.col(filter_col) == predictor)
         pred_df.write_csv(f"{output}_{predictor}.csv")
     end = time.perf_counter()
     logger.success(

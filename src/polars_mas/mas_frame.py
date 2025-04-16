@@ -386,6 +386,7 @@ class MASFrame:
         model: str,
         is_phewas: bool,
         sex_col: str,
+        flipwas: bool
     ) -> pl.DataFrame:
         num_groups = len(predictors) * len(dependents)
         s_p = "s" if len(predictors) > 1 else ""
@@ -405,10 +406,15 @@ class MASFrame:
         for predictor in predictors:
             res_list = []
             for dependent in dependents:
+                if flipwas:
+                    order = [dependent, *covariates, predictor]
+                else:
+                    order = [predictor, *covariates, dependent]
                 lazy_df = (
-                    reg_frame.select(
-                        pl.col([predictor, *covariates, dependent]),
-                        pl.struct([predictor, *covariates, dependent]).alias("model_struct"),
+                    reg_frame
+                    .select(
+                        pl.col(order),
+                        pl.struct(order).alias("model_struct"),
                     )
                     .drop_nulls([predictor, dependent])
                     .select(
@@ -421,11 +427,17 @@ class MASFrame:
             results = pl.collect_all(res_list)
             output = pl.concat([result.unnest("result") for result in results]).sort("pval")
             result_frame = pl.concat([result_frame, output])
+            print(result_frame)
         # output.write_csv(f'{output_path}_{predictor}.csv')
         if is_phewas:
-            result_frame = result_frame.join(phecode_defs, left_on="dependent", right_on="phecode").sort(
+            if flipwas:
+                left_col = 'predictor'
+            else:
+                left_col = 'dependent'
+            result_frame = result_frame.join(phecode_defs, left_on=left_col, right_on="phecode").sort(
                 ["predictor", "pval"]
             )
+            print(result_frame)
         return result_frame
 
 
