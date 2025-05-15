@@ -333,7 +333,6 @@ class MASFrame:
             sex_col=args.sex_col
         )
         regression_df = self._df
-        print(regression_df.head().collect())
         result_df = pl.DataFrame()
         res_list = []
         if not args.flipwas:
@@ -357,11 +356,10 @@ class MASFrame:
                     res_list.append(lazy_df)
                 results = pl.collect_all(res_list)
                 output = pl.concat([result.unnest('result') for result in results]).sort('pval')
-                result_frame = result_frame.vstack(output)
+                result_df = result_df.vstack(output)
         elif args.flipwas:
             for dependent in args.dependents:
                 for predictor in args.predictors:
-                    print(dependent, predictor)
                     order = [predictor, *list(args.covariates), dependent]
                     lazy_df = (
                         regression_df
@@ -379,7 +377,7 @@ class MASFrame:
                     res_list.append(lazy_df)
                 results = pl.collect_all(res_list)
                 output = pl.concat([result.unnest('result') for result in results]).sort('pval')
-                result_frame = pl.concat([result_frame, output])
+                result_df = pl.concat([result_df, output])
         if args.phewas or args.flipwas:
             if args.flipwas:
                 left_col = "predictor"
