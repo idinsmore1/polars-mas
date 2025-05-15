@@ -1,6 +1,6 @@
 import time
 import polars as pl
-import polars_mas.mas_frame as pla
+import polars_mas.mas
 import numpy as np
 import statsmodels.api as sm
 from loguru import logger
@@ -38,7 +38,7 @@ def _update_progress() -> None:
 
 
 def run_association_test(
-    model_struct: pl.Struct, model_type: str, num_groups: int, is_phewas: bool, sex_col: str
+    model_struct: pl.Struct, model_type: str, num_groups: int, is_phewas: bool, is_flipwas: bool, sex_col: str
 ) -> dict:
     global NUM_GROUPS
     NUM_GROUPS = num_groups
@@ -85,7 +85,12 @@ def run_association_test(
             # Remove sex column from covariates and x
             covariates = [col for col in covariates if col != sex_col]
             x = x.select(pl.col([predictor, *covariates]))
-    non_consts = x.polars_mas.check_grouped_independents_for_constants(
+    if is_flipwas:
+        if sex_col in covariates and predictor in sex_specific_codes:
+            # Remove
+            covariates = [col for col in covariates if col != sex_col]
+            x = x.select(pl.col([predictor, *covariates]))
+    non_consts = x.mas.check_grouped_independents_for_constants(
         [predictor, *covariates], dependent
     )
     x = x.select(non_consts)

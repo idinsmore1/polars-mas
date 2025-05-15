@@ -3,7 +3,7 @@ import polars as pl
 
 from functools import partial
 from loguru import logger
-from polars_mas.consts import male_specific_codes, female_specific_codes
+from polars_mas.consts import male_specific_codes, female_specific_codes, phecode_defs
 from polars_mas.model_funcs import run_association_test
 
 
@@ -153,6 +153,30 @@ class MASFrame:
             df = df.drop(pl.col(const_cols))
         return df
 
+    def check_grouped_independents_for_constants(
+        self, independents: list[str], dependent: str = None
+    ) -> list[str]:
+        const_cols = (
+            self._df.select(pl.col(independents).drop_nulls().unique().len())
+            # .collect()
+            .transpose(include_header=True)
+            .filter(pl.col("column_0") == 1)
+            .select(pl.col("column"))
+        )["column"].to_list()
+        if const_cols:
+            if len(const_cols) > 1:
+                predicate = "are"
+                plural = "s"
+            else:
+                predicate = "is"
+                plural = ""
+            logger.warning(
+                f"Column{plural} {','.join(const_cols)} {predicate} constant{plural}. Dropping from {dependent} analysis."
+            )
+            non_consts = [col for col in independents if col not in const_cols]
+            return non_consts
+        return independents
+
     def handle_missing_covariates(self, args) -> pl.LazyFrame:
         """Handle missing covariates in the DataFrame."""
         # If method is not drop, just fill the missing values with the specified method
@@ -300,6 +324,75 @@ class MASFrame:
     def run_associations(self, args) -> pl.LazyFrame:
         num_groups = len(args.predictors) * len(args.dependents)
         logger.info(f'Running {num_groups} associations for {len(args.predictors)} predictors and {len(args.dependents)} dependents.')
+        regression_function = partial(
+            run_association_test,
+            model_type=args.model,
+            num_groups=num_groups,
+            is_phewas=args.phewas,
+            is_flipwas=args.flipwas,
+            sex_col=args.sex_col
+        )
+        regression_df = self._df
+        print(regression_df.head().collect())
+        result_df = pl.DataFrame()
+        res_list = []
+        if not args.flipwas:
+            for predictor in args.predictors:
+                for dependent in args.dependents:
+                    print(predictor, dependent)
+                    order = [predictor, *list(args.covariates), dependent]
+                    lazy_df = (
+                        regression_df
+                        .select(
+                            pl.col(order),
+                            pl.struct(order).alias('model_struct')
+                        )
+                        .drop_nulls([predictor, dependent])
+                        .select(
+                            pl.col('model_struct')
+                            .map_batches(regression_function, returns_scalar=True, return_dtype=pl.Struct)
+                            .alias('result')
+                        )
+                    )
+                    res_list.append(lazy_df)
+                results = pl.collect_all(res_list)
+                output = pl.concat([result.unnest('result') for result in results]).sort('pval')
+                result_frame = result_frame.vstack(output)
+        elif args.flipwas:
+            for dependent in args.dependents:
+                for predictor in args.predictors:
+                    print(dependent, predictor)
+                    order = [predictor, *list(args.covariates), dependent]
+                    lazy_df = (
+                        regression_df
+                        .select(
+                            pl.col(order),
+                            pl.struct(order).alias('model_struct')
+                        )
+                        .drop_nulls([predictor, dependent])
+                        .select(
+                            pl.col('model_struct')
+                            .map_batches(regression_function, returns_scalar=True, return_dtype=pl.Struct)
+                            .alias('result')
+                        )
+                    )
+                    res_list.append(lazy_df)
+                results = pl.collect_all(res_list)
+                output = pl.concat([result.unnest('result') for result in results]).sort('pval')
+                result_frame = pl.concat([result_frame, output])
+        if args.phewas or args.flipwas:
+            if args.flipwas:
+                left_col = "predictor"
+            else:
+                left_col = "dependent"
+            result_frame = (
+                result_frame
+                .join(phecode_defs, left_on=left_col, right_on='phecode')
+                .sort(['predictor', 'pval'])
+            )
+        return result_frame
+
+                
 
 
 def run_multiple_association_study(args) -> pl.LazyFrame:
@@ -320,4 +413,5 @@ def run_multiple_association_study(args) -> pl.LazyFrame:
         .mas.category_to_dummy(args)
         .collect()
         .lazy()
+        .mas.run_associations(args)
     )
