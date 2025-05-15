@@ -29,7 +29,15 @@ def main() -> None:
         "--output",
         required=True,
         type=Path,
-        help="Output file prefix. Will be suffixed with '{predictor}.csv' for each predictor.",
+        help="Output file prefix. Will be suffixed with '{suffix}.csv'",
+    )
+    ingroup.add_argument(
+        '-f',
+        '--suffix',
+        type=str,
+        choices=['predictors', 'dependents'],
+        default='predictors',
+        help="Use either the name of the predictors or the dependents as the suffix for the output files. Default is predictor.",
     )
     ingroup.add_argument(
         "-s", "--separator", type=str, default=",", help="Separator for the input file. Default is ','"
@@ -145,7 +153,26 @@ def main() -> None:
     phewas_group.add_argument(
         "--flipwas",
         action="store_true",
-        help="This is a PheWAS analysis with phecodes as the predictor variables. NOTE: In this case, please still pass the phecodes as the dependent variables.",
+        help="This is a PheWAS analysis with phecodes as the predictor variables",
+    )
+    sex_group = assoc_group.add_mutually_exclusive_group(required=False)
+    sex_group.add_argument(
+        '-mo',
+        '--male-only',
+        action='store_true',
+        help="Use only males in the analysis. Default is False.",
+    )
+    sex_group.add_argument(
+        '-fo',
+        '--female-only',
+        action='store_true',
+        help="Use only females in the analysis. Default is False.",
+    )
+    assoc_group.add_argument(
+        "--sex-col",
+        type=str,
+        help="Column name for sex-based analysis. Default is sex. Assumes females = 1 and males = 0.",
+        default='sex',
     )
     args = parser.parse_args()
     setup_logger(args.output, args.verbose)
@@ -157,9 +184,9 @@ def main() -> None:
 def load_polars_and_limit_threads(args):
     """Polars has to be limited before importing it"""
     os.environ['POLARS_MAX_THREADS'] = str(args.num_workers)
-    pl = import_module("polars")
+    import_module("polars")
     import_module("polars_mas.mas_frame")
-    logger.info(pl.thread_pool_size())
+
 
 def setup_logger(output: Path, verbose: bool):
     logger.remove()
@@ -245,6 +272,7 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
             raise ValueError(f"Covariate {covariate} not found in input file.")
     args.covariates = covariates
     delattr(args, "covariates_indices")
+    args.independents = predictors + covariates
     
     if args.categorical_covariates:
         if not covariates:
@@ -273,6 +301,13 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
             f"Number of computation threads ({args.threads_per_worker}) exceeds number of available CPUs ({os.cpu_count()}). Setting threads to 1."
         )
         args.threads_per_worker = 1
+    if args.flipwas and args.suffix == "predictors":
+        logger.warning('This is a flipped PheWAS analysis. All output files will be merged into {dependent}.csv to reduce the number of files.')
+        args.suffix = "dependents"
+
+    if args.male_only or args.female_only:
+        if args.sex_col not in file_col_names:
+            raise ValueError(f"Column {args.sex_col} not found in input file, but specified a sex-specific analysis. Please set the correct sex column name with --sex-col.")
     return args
 
 
