@@ -28,9 +28,9 @@ class MASFrame:
         if args.sex_col not in args.col_names:
             logger.log("IMPORTANT", f"sex column {args.sex_col} not found in input file. Sex-specific PheWAS filtering will not be performed.")
             return self._df
-        male_codes_in_df = [col for col in args.col_names if col in male_specific_codes]
-        female_codes_in_df = [col for col in args.col_names if col in female_specific_codes]
-        sex_codes = male_codes_in_df + female_codes_in_df
+        male_codes_in_df = args.col_names.intersection(male_specific_codes)
+        female_codes_in_df = args.col_names.intersection(female_specific_codes)
+        sex_codes = male_codes_in_df.union(female_codes_in_df)
         if not male_codes_in_df and not female_codes_in_df:
             logger.log("IMPORTANT", "No sex-specific PheCodes found in input file. Returning all phecodes.")
             return self._df
@@ -102,23 +102,24 @@ class MASFrame:
         if args.male_only:
             logger.log("IMPORTANT", "Filtering to male-only data.")
             df = self._df.filter(pl.col(args.sex_col).eq(args.male_code)).drop(args.sex_col)
-            args.predictors = [col for col in args.predictors if col != args.sex_col]
-            args.covariates = [col for col in args.covariates if col != args.sex_col]
-            args.dependents = [col for col in args.dependents if col != args.sex_col]
-            args.independents = args.predictors + args.covariates
-            args.selected_columns = args.predictors + args.covariates + args.dependents
+            args.predictors = args.predictors.difference({args.sex_col})
+            args.covariates = args.covariates.difference({args.sex_col})
+            args.dependents = args.dependents.difference({args.sex_col})
+            args.categorical_covariates = args.categorical_covariates.difference({args.sex_col})
+            args.independents = args.predictors.union(args.covariates)
+            args.selected_columns = args.predictors.union(args.covariates).union(args.dependents)
         elif args.female_only:
             logger.log("IMPORTANT", "Filtering to male-only data.")
             df = self._df.filter(pl.col(args.sex_col).eq(args.female_code)).drop(args.sex_col)
-            args.predictors = [col for col in args.predictors if col != args.sex_col]
-            args.covariates = [col for col in args.covariates if col != args.sex_col]
-            args.dependents = [col for col in args.dependents if col != args.sex_col]
-            args.independents = args.predictors + args.covariates
-            args.selected_columns = args.predictors + args.covariates + args.dependents
+            args.predictors = args.predictors.difference({args.sex_col})
+            args.covariates = args.covariates.difference({args.sex_col})
+            args.dependents = args.dependents.difference({args.sex_col})
+            args.categorical_covariates = args.categorical_covariates.difference({args.sex_col})
+            args.independents = args.predictors.union(args.covariates)
+            args.selected_columns = args.predictors.union(args.covariates).union(args.dependents)
         else:
             df = self._df
-
-        const_cols = (
+        const_cols = set(
             df
             .select(pl.col(args.selected_columns).drop_nulls().unique().len())
             .collect()
@@ -135,11 +136,15 @@ class MASFrame:
             if not args.drop_constants:
                 # logger.error(f"Columns {','.join(const_cols)} are constant. Please remove them from selection or use --drop-constants.")
                 raise ValueError(f"Columns {','.join(const_cols)} are constant. Please remove them from selection or use --drop-constants.")
-            args.predictors = [col for col in args.predictors if col not in const_cols]
-            args.covariates = [col for col in args.covariates if col not in const_cols]
-            args.dependents = [col for col in args.dependents if col not in const_cols]
-            args.independents = args.predictors + args.covariates
-            args.selected_columns = args.predictors + args.covariates + args.dependents
+            logger.log("IMPORTANT", f"Columns {','.join(const_cols)} are constant. They will be dropped.")
+            args.predictors = args.predictors.difference(const_cols)
+            args.covariates = args.covariates.difference(const_cols)
+            args.dependents = args.dependents.difference(const_cols)
+            args.categorical_covariates = args.categorical_covariates.difference(const_cols)
+            args.independents = args.predictors.union(args.covariates)
+            args.selected_columns = args.predictors.union(args.covariates).union(args.dependents)
+            df = df.drop(pl.col(const_cols))
+        return df
 
 
     def validate_dependents(self, args) -> pl.LazyFrame:

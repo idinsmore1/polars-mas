@@ -11,6 +11,6 @@ phecode_defs = (
     .select(["phecode", "phenotype", "sex", "category", "category_number"])
     .collect()
 )
-male_specific_codes = phecode_defs.filter(pl.col("sex") == "Male")["phecode"].to_list()
-female_specific_codes = phecode_defs.filter(pl.col("sex") == "Female")["phecode"].to_list()
-sex_specific_codes = male_specific_codes + female_specific_codes
+male_specific_codes = set(phecode_defs.filter(pl.col("sex") == "Male")["phecode"].to_list())
+female_specific_codes = set(phecode_defs.filter(pl.col("sex") == "Female")["phecode"].to_list())
+sex_specific_codes = male_specific_codes.union(female_specific_codes)
