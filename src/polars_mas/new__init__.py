@@ -109,6 +109,13 @@ def main() -> None:
         "Association Settings", "Settings for the association analysis."
     )
     assoc_group.add_argument(
+        '-dc',
+        '--drop-constants',
+        action='store_true',
+        help="Drop columns with constant values in the predictors, dependents and covariates. Default is False.",
+    )
+
+    assoc_group.add_argument(
         "-qt",
         "--quantitative",
         action="store_true",
@@ -127,6 +134,13 @@ def main() -> None:
         type=int,
         help="Number of threads each worker has available. Default is 1.",
         default=1,
+    )
+    assoc_group.add_argument(
+        '-mc',
+        '--min-cases',
+        type=int,
+        default=20,
+        help="Minimum number of cases for a dependent variable or PheCode to be included in the analysis. Default is 20.",
     )
     assoc_group.add_argument(
         "-m",
@@ -171,21 +185,35 @@ def main() -> None:
     assoc_group.add_argument(
         "--sex-col",
         type=str,
-        help="Column name for sex-based analysis. Default is sex. Assumes females = 1 and males = 0.",
+        help="Column name for sex-based analysis. Default is sex.",
         default='sex',
+    )
+    assoc_group.add_argument(
+        "--female-code",
+        type=int,
+        default=1,
+        help="Coded value for females in the sex-column. Default is 1.",
+    )
+    assoc_group.add_argument(
+        "--male-code",
+        type=int,
+        default=0,
+        help="Coded value for males in the sex-column. Default is 0.",
     )
     args = parser.parse_args()
     setup_logger(args.output, args.verbose)
     validate_args(args)
     log_args(args)
-    load_polars_and_limit_threads(args)
+    mas = load_polars_and_limit_threads(args)
+    mas.run_multiple_association_study(args)
 
 
 def load_polars_and_limit_threads(args):
     """Polars has to be limited before importing it"""
     os.environ['POLARS_MAX_THREADS'] = str(args.num_workers)
     import_module("polars")
-    import_module("polars_mas.mas_frame")
+    mas = import_module("polars_mas.mas")
+    return mas
 
 
 def setup_logger(output: Path, verbose: bool):
@@ -233,7 +261,7 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
         raise FileNotFoundError(f"Output directory {args.output.parent} does not exist.")
     # Load the column headers
     file_col_names = _load_input_header(args.input, args.separator)
-
+    args.col_names = file_col_names
     # Load the predictors
     if args.predictors:
         predictors = args.predictors.split(",")
@@ -302,12 +330,14 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
         )
         args.threads_per_worker = 1
     if args.flipwas and args.suffix == "predictors":
-        logger.warning('This is a flipped PheWAS analysis. All output files will be merged into {dependent}.csv to reduce the number of files.')
+        logger.warning('This is a flipped PheWAS analysis. All output files will be merged into {dependent}_flipped.csv to reduce the number of files.')
         args.suffix = "dependents"
 
     if args.male_only or args.female_only:
         if args.sex_col not in file_col_names:
             raise ValueError(f"Column {args.sex_col} not found in input file, but specified a sex-specific analysis. Please set the correct sex column name with --sex-col.")
+    if args.male_code == args.female_code:
+        raise ValueError(f'Female code ({args.female_code}) cannot be equal to the male code ({args.male_code}).')
     return args
 
 
@@ -315,6 +345,7 @@ def log_args(args):
     log = "Input arguments:\n"
     skip_keys = [
         "null_values",
+        "col_names"
     ]
     val_dict = {k: v for k, v in vars(args).items() if k not in skip_keys}
     for key, value in val_dict.items():
