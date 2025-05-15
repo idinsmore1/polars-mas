@@ -50,7 +50,7 @@ def run_mas(
         "model": model,
         "is_phewas": kwargs["phewas"],
         "sex_col": kwargs["phewas_sex_col"],
-        "flipwas": kwargs["flipwas"]
+        "flipwas": kwargs["flipwas"],
     }
     output_df = preprocessed.polars_mas.run_associations(**assoc_kwargs)
     for predictor in predictors:

@@ -78,10 +78,10 @@ class MASFrame:
         if const_cols:
             if not drop:
                 logger.error(
-                    f'Columns {",".join(const_cols)} are constants. Please remove from analysis or set drop=True.'
+                    f"Columns {','.join(const_cols)} are constants. Please remove from analysis or set drop=True."
                 )
                 raise ValueError
-            logger.log("IMPORTANT", f'Dropping constant columns {",".join(const_cols)}')
+            logger.log("IMPORTANT", f"Dropping constant columns {','.join(const_cols)}")
             new_independents = [col for col in independents if col not in const_cols]
             independents.clear()
             independents.extend(new_independents)
@@ -106,7 +106,7 @@ class MASFrame:
                 predicate = "is"
                 plural = ""
             logger.warning(
-                f'Column{plural} {",".join(const_cols)} {predicate} constant{plural}. Dropping from {dependent} analysis.'
+                f"Column{plural} {','.join(const_cols)} {predicate} constant{plural}. Dropping from {dependent} analysis."
             )
             non_consts = [col for col in independents if col not in const_cols]
             return non_consts
@@ -206,7 +206,7 @@ class MASFrame:
         # If method is not drop, just fill the missing values with the specified method
         if method != "drop":
             logger.info(
-                f'Filling missing values in columns {",".join(independents)} with {method} method.'
+                f"Filling missing values in columns {','.join(independents)} with {method} method."
             )
             return self._df.with_columns(pl.col(independents).fill_null(strategy=method))
         # If method is drop, drop rows with missing values in the specified independents
@@ -260,7 +260,7 @@ class MASFrame:
             plural = len(not_binary) > 1
             logger.log(
                 "IMPORTANT",
-                f'Categorical column{"s" if plural else ""} {",".join(not_binary)} {"are" if plural else "is"} not binary. LazyFrame will be loaded to create dummy variables.',
+                f"Categorical column{'s' if plural else ''} {','.join(not_binary)} {'are' if plural else 'is'} not binary. LazyFrame will be loaded to create dummy variables.",
             )
             dummy = self._df.collect().to_dummies(not_binary, drop_first=True).lazy()
             dummy_cols = dummy.collect_schema().names()
@@ -386,7 +386,7 @@ class MASFrame:
         model: str,
         is_phewas: bool,
         sex_col: str,
-        flipwas: bool
+        flipwas: bool,
     ) -> pl.DataFrame:
         num_groups = len(predictors) * len(dependents)
         s_p = "s" if len(predictors) > 1 else ""
@@ -411,8 +411,7 @@ class MASFrame:
                 else:
                     order = [predictor, *covariates, dependent]
                 lazy_df = (
-                    reg_frame
-                    .select(
+                    reg_frame.select(
                         pl.col(order),
                         pl.struct(order).alias("model_struct"),
                     )
@@ -431,9 +430,9 @@ class MASFrame:
         # output.write_csv(f'{output_path}_{predictor}.csv')
         if is_phewas:
             if flipwas:
-                left_col = 'predictor'
+                left_col = "predictor"
             else:
-                left_col = 'dependent'
+                left_col = "dependent"
             result_frame = result_frame.join(phecode_defs, left_on=left_col, right_on="phecode").sort(
                 ["predictor", "pval"]
             )

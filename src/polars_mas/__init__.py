@@ -10,6 +10,7 @@ from typing import Callable
 from loguru import logger
 from threadpoolctl import threadpool_limits
 
+
 def multiple_association_study() -> None:
     parser = argparse.ArgumentParser(
         description="Polars-MAS: A Python package for multiple association analysis."
@@ -140,8 +141,8 @@ def multiple_association_study() -> None:
     parser.add_argument(
         "--flipwas",
         action="store_true",
-        help="Run PheWAS flipped where predictor is the outcome of testing all phecodes."
-    ),
+        help="Run PheWAS flipped where predictor is the outcome of testing all phecodes.",
+    )
     parser.add_argument(
         "-th",
         "--threads",
@@ -169,16 +170,18 @@ def multiple_association_study() -> None:
 def _log_args(args):
     log = "Input arguments:\n"
     skip_keys = [
-        'dependents_indices',
-        'covariates_indicies',
-        'null_values',
+        "dependents_indices",
+        "covariates_indicies",
+        "null_values",
     ]
-    colors = cycle([
-        '\033[4;32m',  # green
-        '\033[4;33m',  # yellow
-        '\033[4;36m',  # cyan
-        '\033[4;31m'   # red
-    ])
+    colors = cycle(
+        [
+            "\033[4;32m",  # green
+            "\033[4;33m",  # yellow
+            "\033[4;36m",  # cyan
+            "\033[4;31m",  # red
+        ]
+    )
     val_dict = {k: v for k, v in vars(args).items() if k not in skip_keys}
     for (key, value), color in zip(val_dict.items(), colors):
         if key in skip_keys:

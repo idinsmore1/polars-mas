@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 polars-mas = "polars_mas:multiple_association_study"
+polars-mas-test = "polars_mas.new__init__:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -20,3 +21,9 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 105
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "ruff>=0.11.9",
+]
