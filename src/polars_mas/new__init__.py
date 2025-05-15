@@ -261,7 +261,7 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
         raise FileNotFoundError(f"Output directory {args.output.parent} does not exist.")
     # Load the column headers
     file_col_names = _load_input_header(args.input, args.separator)
-    args.col_names = file_col_names
+    args.col_names = set(file_col_names)
     # Load the predictors
     if args.predictors:
         predictors = args.predictors.split(",")
@@ -272,7 +272,7 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
     for predictor in predictors:
         if predictor not in file_col_names:
             raise ValueError(f"Predictor {predictor} not found in input file.")
-    args.predictors = predictors
+    args.predictors = set(predictors)
     delattr(args, "predictors_indices")
 
     # Load the dependents
@@ -285,7 +285,7 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
     for dependent in dependents:
         if dependent not in file_col_names:
             raise ValueError(f"Dependent {dependent} not found in input file.")
-    args.dependents = dependents
+    args.dependents = set(dependents)
     delattr(args, "dependents_indices")
 
     # load the covariates
@@ -298,9 +298,12 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
     for covariate in covariates:
         if covariate not in file_col_names:
             raise ValueError(f"Covariate {covariate} not found in input file.")
-    args.covariates = covariates
+    args.covariates = set(covariates)
     delattr(args, "covariates_indices")
+    
+    # Combine the predictors, dependents and covariates into a single list
     args.independents = predictors + covariates
+    args.selected_columns = predictors + covariates + dependents
     
     if args.categorical_covariates:
         if not covariates:
@@ -311,7 +314,7 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
                 raise ValueError(f"Categorical covariate {covariate} not found in covariates list.")
     else:
         categorical_covariates = []
-    args.categorical_covariates = categorical_covariates
+    args.categorical_covariates = set(categorical_covariates)
 
     if args.quantitative and args.model in ["firth"]:
         raise ValueError("Quantitative traits must be used with linear based models.")
@@ -345,13 +348,16 @@ def log_args(args):
     log = "Input arguments:\n"
     skip_keys = [
         "null_values",
-        "col_names"
+        "col_names",
+        "selected_columns",
     ]
     val_dict = {k: v for k, v in vars(args).items() if k not in skip_keys}
     for key, value in val_dict.items():
         if key in skip_keys:
             continue
         print_val = value
+        if isinstance(value, set):
+            value = list(value)
         if key in ["dependents", "covariates", "predictors", "categorical_covariates"]:
             if len(value) > 5:
                 print_val = f"{','.join(value[:2])}...{','.join(value[-2:])} - ({len(value)} total)"

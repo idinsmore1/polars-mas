@@ -62,13 +62,13 @@ class MASFrame:
                 .alias(column)
                 for column in female_codes_in_df
             ])
+            .collect()
         )
         # Counts post-filtering
         post_counts = (
             code_matched
             .select(sex_codes)
             .count()
-            .collect()
             .transpose(
                 include_header=True,
                 header_name='phecode',
@@ -76,7 +76,8 @@ class MASFrame:
             )
         )
         changed = (
-            pre_counts.join(post_counts, on="phecode", how="inner", suffix="_post")
+            pre_counts
+            .join(post_counts, on="phecode", how="inner", suffix="_post")
             .filter(pl.col("count") != pl.col("count_post"))
             .get_column("phecode")
             .to_list()
@@ -93,11 +94,53 @@ class MASFrame:
                 f"Male specific codes with mismatched sex values: {[col for col in changed if col in male_codes_in_df]}"
             )
         
-        return code_matched
+        return code_matched.lazy()
 
 
-    def check_independents_for_constants(self, args) -> pl.LazyFrame:
-        pass
+    def check_for_constants(self, args) -> pl.LazyFrame:
+        """Check/remove constant columns from the DataFrame."""
+        if args.male_only:
+            logger.log("IMPORTANT", "Filtering to male-only data.")
+            df = self._df.filter(pl.col(args.sex_col).eq(args.male_code)).drop(args.sex_col)
+            args.predictors = [col for col in args.predictors if col != args.sex_col]
+            args.covariates = [col for col in args.covariates if col != args.sex_col]
+            args.dependents = [col for col in args.dependents if col != args.sex_col]
+            args.independents = args.predictors + args.covariates
+            args.selected_columns = args.predictors + args.covariates + args.dependents
+        elif args.female_only:
+            logger.log("IMPORTANT", "Filtering to male-only data.")
+            df = self._df.filter(pl.col(args.sex_col).eq(args.female_code)).drop(args.sex_col)
+            args.predictors = [col for col in args.predictors if col != args.sex_col]
+            args.covariates = [col for col in args.covariates if col != args.sex_col]
+            args.dependents = [col for col in args.dependents if col != args.sex_col]
+            args.independents = args.predictors + args.covariates
+            args.selected_columns = args.predictors + args.covariates + args.dependents
+        else:
+            df = self._df
+
+        const_cols = (
+            df
+            .select(pl.col(args.selected_columns).drop_nulls().unique().len())
+            .collect()
+            .transpose(
+                include_header=True,
+                header_name='column',
+                column_names=['unique_count']
+            )
+            .filter(pl.col("unique_count") == 1)
+            .get_column("column")
+            .to_list()
+        )
+        if const_cols:
+            if not args.drop_constants:
+                # logger.error(f"Columns {','.join(const_cols)} are constant. Please remove them from selection or use --drop-constants.")
+                raise ValueError(f"Columns {','.join(const_cols)} are constant. Please remove them from selection or use --drop-constants.")
+            args.predictors = [col for col in args.predictors if col not in const_cols]
+            args.covariates = [col for col in args.covariates if col not in const_cols]
+            args.dependents = [col for col in args.dependents if col not in const_cols]
+            args.independents = args.predictors + args.covariates
+            args.selected_columns = args.predictors + args.covariates + args.dependents
+
 
     def validate_dependents(self, args) -> pl.LazyFrame:
         pass
@@ -110,4 +153,8 @@ def run_multiple_association_study(args) -> pl.LazyFrame:
     # Check if the data is suitable for PheWAS analysis.
     start = time.perf_counter()
     df = pl.scan_csv(args.input, separator=args.separator, null_values=args.null_values)
-    df.mas.phewas_check(args)
+    (
+        df
+        .mas.phewas_check(args)
+        .mas.check_for_constants(args)
+    )
