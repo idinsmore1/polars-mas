@@ -300,7 +300,7 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
             raise ValueError(f"Covariate {covariate} not found in input file.")
     args.covariates = set(covariates)
     delattr(args, "covariates_indices")
-    
+
     # Combine the predictors, dependents and covariates into a single list
     args.independents = predictors + covariates
     args.selected_columns = predictors + covariates + dependents
@@ -350,6 +350,7 @@ def log_args(args):
         "null_values",
         "col_names",
         "selected_columns",
+        "independents"
     ]
     val_dict = {k: v for k, v in vars(args).items() if k not in skip_keys}
     for key, value in val_dict.items():
