@@ -191,6 +191,7 @@ def linear_regression(x: pl.DataFrame, y: np.ndarray) -> dict:
     """
     total_counts = y.shape[0]
     x = sm.add_constant(x, prepend=False)
+    # print(x)
     model = sm.OLS(y, x).fit(maxiter=1000)
     return {
         "total_n": total_counts,

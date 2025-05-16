@@ -311,11 +311,11 @@ class MASFrame:
         )
         if not_binary:
             logger.log("IMPORTANT", f"Categorical covariates {','.join(not_binary)} are not binary. Converting to dummy variables.")
-            dummy = self._df.collect().to_dummies(not_binary, drop_first=True).lazy()
+            dummy = self._df.collect().to_dummies(not_binary, separator='_dum_', drop_first=True).lazy()
             dummy_cols = set(dummy.collect_schema().names())
-            not_cat = args.covariates.difference(args.categorical_covariates)
-            new_cols = args.selected_columns.difference(dummy_cols)
-            args.covariates = not_cat.union(dummy_cols)
+            new_cols = {x for x in dummy_cols.difference(args.selected_columns) if '_dum_' in x}
+            args.covariates = args.covariates.difference(not_binary).union(new_cols)
+            args.categorical_covariates = args.categorical_covariates.difference(not_binary).union(new_cols)
             args.independents = args.predictors.union(args.covariates)
             args.selected_columns = args.predictors.union(args.covariates).union(args.dependents)
             return dummy
@@ -334,11 +334,10 @@ class MASFrame:
         )
         regression_df = self._df
         result_df = pl.DataFrame()
-        res_list = []
         if not args.flipwas:
             for predictor in args.predictors:
+                res_list = []
                 for dependent in args.dependents:
-                    print(predictor, dependent)
                     order = [predictor, *list(args.covariates), dependent]
                     lazy_df = (
                         regression_df
@@ -359,6 +358,7 @@ class MASFrame:
                 result_df = result_df.vstack(output)
         elif args.flipwas:
             for dependent in args.dependents:
+                res_list = []
                 for predictor in args.predictors:
                     order = [predictor, *list(args.covariates), dependent]
                     lazy_df = (
@@ -377,20 +377,19 @@ class MASFrame:
                     res_list.append(lazy_df)
                 results = pl.collect_all(res_list)
                 output = pl.concat([result.unnest('result') for result in results]).sort('pval')
-                result_df = pl.concat([result_df, output])
+                result_df = result_df.vstack(output)
+        # Add annotations to the results if it's a phewas.
         if args.phewas or args.flipwas:
             if args.flipwas:
                 left_col = "predictor"
             else:
                 left_col = "dependent"
-            result_frame = (
-                result_frame
+            result_df = (
+                result_df
                 .join(phecode_defs, left_on=left_col, right_on='phecode')
                 .sort(['predictor', 'pval'])
             )
-        return result_frame
-
-                
+        return result_df
 
 
 def run_multiple_association_study(args) -> pl.LazyFrame:
@@ -400,7 +399,7 @@ def run_multiple_association_study(args) -> pl.LazyFrame:
     # Check if the data is suitable for PheWAS analysis.
     start = time.perf_counter()
     df = pl.scan_csv(args.input, separator=args.separator, null_values=args.null_values)
-    (
+    result = (
         df
         .mas.handle_missing_covariates(args)
         .mas.phewas_check(args)
@@ -413,3 +412,4 @@ def run_multiple_association_study(args) -> pl.LazyFrame:
         .lazy()
         .mas.run_associations(args)
     )
+    print(result)
