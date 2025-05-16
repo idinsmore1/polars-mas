@@ -12,8 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-polars-mas = "polars_mas:multiple_association_study"
-polars-mas-test = "polars_mas.new__init__:main"
+polars-mas = "polars_mas:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -110,7 +110,7 @@ class MASFrame:
             args.independents = args.predictors.union(args.covariates)
             args.selected_columns = args.predictors.union(args.covariates).union(args.dependents)
         elif args.female_only:
-            logger.log("IMPORTANT", "Filtering to male-only data.")
+            logger.log("IMPORTANT", "Filtering to female-only data.")
             df = self._df.filter(pl.col(args.sex_col).eq(args.female_code)).drop(args.sex_col)
             args.predictors = args.predictors.difference({args.sex_col})
             args.covariates = args.covariates.difference({args.sex_col})
@@ -226,7 +226,7 @@ class MASFrame:
                 header_name='dependent',
                 column_names=['unique_count']
             )
-            .filter(pl.col('unique_count').ne(2))
+            .filter(pl.col('unique_count').gt(2))
             .get_column('dependent')
             .to_list()
         )
@@ -414,7 +414,7 @@ def run_multiple_association_study(args) -> pl.LazyFrame:
     )
     if args.suffix == "predictors":
         for predictor in args.predictors:
-            output_path = f"{args.output}_{dependent}{'_male_only' if args.male_only else ''}{'_female_only' if args.female_only else ''}{'_phewas' if args.phewas else ''}.csv"
+            output_path = f"{args.output}_{predictor}{'_male_only' if args.male_only else ''}{'_female_only' if args.female_only else ''}{'_phewas' if args.phewas else ''}.csv"
             (
                 result
                 .filter(pl.col("predictor").eq(predictor))
