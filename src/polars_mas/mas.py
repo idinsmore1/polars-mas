@@ -412,4 +412,21 @@ def run_multiple_association_study(args) -> pl.LazyFrame:
         .lazy()
         .mas.run_associations(args)
     )
-    print(result)
+    if args.suffix == "predictors":
+        for predictor in args.predictors:
+            output_path = f"{args.output}_{dependent}{'_male_only' if args.male_only else ''}{'_female_only' if args.female_only else ''}{'_phewas' if args.phewas else ''}.csv"
+            (
+                result
+                .filter(pl.col("predictor").eq(predictor))
+                .sort("pval")
+                .write_csv(output_path)
+            )
+    elif args.suffix == "dependents":
+        for dependent in args.dependents:
+            output_path = f"{args.output}_{dependent}{'_male_only' if args.male_only else ''}{'_female_only' if args.female_only else ''}{'_flipped_phewas' if args.flipwas else ''}.csv"
+            (
+                result
+                .filter(pl.col("dependent").eq(dependent))
+                .sort("pval")
+                .write_csv(output_path)
+            )
