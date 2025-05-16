@@ -1,6 +1,6 @@
 [project]
 name = "polars-mas"
-version = "0.2.0"
+version = "0.2.1"
 description = "polars-mas - a fast multiple asspciation library for python backed by polars"
 readme = "README.md"
 requires-python = ">=3.10"
