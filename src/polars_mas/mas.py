@@ -1,3 +1,4 @@
+import datetime
 import time
 import polars as pl
 
@@ -430,6 +431,10 @@ def run_multiple_association_study(args) -> pl.LazyFrame:
                 .sort("pval")
                 .write_csv(output_path)
             )
+    end = time.perf_counter()
+    logger.success(
+        f"Associations Complete! Runtime: {str(datetime.timedelta(seconds=(round(end - start))))}"
+    )
 
 @pl.api.register_expr_namespace("transforms")
 class Transforms:

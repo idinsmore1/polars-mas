@@ -202,8 +202,6 @@ def main() -> None:
     setup_logger(args.output, args.verbose)
     validate_args(args)
     log_args(args)
-    with open('src/tmp/args.pkl', 'wb') as f:
-        pickle.dump(args, f)
     mas = load_polars_and_limit_threads(args)
     mas.run_multiple_association_study(args)
 
