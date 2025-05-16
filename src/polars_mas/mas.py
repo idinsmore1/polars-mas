@@ -430,3 +430,14 @@ def run_multiple_association_study(args) -> pl.LazyFrame:
                 .sort("pval")
                 .write_csv(output_path)
             )
+
+@pl.api.register_expr_namespace("transforms")
+class Transforms:
+    def __init__(self, expr: pl.Expr) -> None:
+        self._expr = expr
+
+    def standardize(self) -> pl.Expr:
+        return (self._expr - self._expr.mean()) / self._expr.std()
+
+    def min_max(self) -> pl.Expr:
+        return (self._expr - self._expr.min()) / (self._expr.max() - self._expr.min())
