@@ -51,9 +51,9 @@ def run_association_test(
         "OR": float("nan"),
         "ci_low": float("nan"),
         "ci_high": float("nan"),
-        "cases": float("nan"),
-        "controls": float("nan"),
-        "total_n": float("nan"),
+        "cases": -9,
+        "controls": -9,
+        "total_n": -9,
         "failed_reason": "nan",
         "equation": "nan",
     }
