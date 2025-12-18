@@ -131,7 +131,7 @@ class MASConfig:
 
     def summary(self):
         logger.info(
-            "Configuration summary:\n"
+            "\nConfiguration summary:\n"
             f"  Analysis type: {self.analysis_type}\n"
             f"  Input file: {self.input}\n"
             f"  Output prefix: {self.output}\n"
