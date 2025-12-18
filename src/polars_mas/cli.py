@@ -45,8 +45,6 @@ def create_parser() -> argparse.ArgumentParser:
         type=str,
         help="Covariate columns (comma separated list, names or 'i:INDEX for indices)",
     )
-
-
     return parser
 
 

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 from functools import partial
+from loguru import logger
 
 import polars as pl
 
@@ -127,3 +128,26 @@ class MASConfig:
             dependents=args.dependents,
             covariates=args.covariates,
         )
+
+    def summary(self):
+        logger.info(
+            "Configuration summary:\n"
+            f"  Analysis type: {self.analysis_type}\n"
+            f"  Input file: {self.input}\n"
+            f"  Output prefix: {self.output}\n"
+            f"  Predictors:  {self._format_column_list(self.predictor_columns)}\n"
+            f"  Dependents:  {self._format_column_list(self.dependent_columns)}\n"
+            f"  Covariates:  {self._format_column_list(self.covariate_columns)}"
+        )
+
+    @staticmethod
+    def _format_column_list(columns: list[str], max_display: int = 5) -> str:
+        """Format column list for display, truncating if too long."""
+        n = len(columns)
+        if n == 0:
+            return "(none)"
+        if n <= max_display:
+            return f"{n} column{'s' if n != 1 else ''}: {', '.join(columns)}"
+        # Show first 2 and last 2 with count
+        preview = f"{columns[0]}, {columns[1]}, ... {columns[-2]}, {columns[-1]}"
+        return f"{n} columns: {preview}"
