@@ -13,3 +13,4 @@ example_data/*.csv
 *.log
 .ruff_cache/
 dist/
+CLAUDE.md

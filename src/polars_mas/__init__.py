@@ -30,11 +30,11 @@ def main() -> None:
         help="Output file prefix. Will be suffixed with '{suffix}.csv'",
     )
     ingroup.add_argument(
-        '-f',
-        '--suffix',
+        "-f",
+        "--suffix",
         type=str,
-        choices=['predictors', 'dependents'],
-        default='predictors',
+        choices=["predictors", "dependents"],
+        default="predictors",
         help="Use either the name of the predictors or the dependents as the suffix for the output files. Default is predictor.",
     )
     ingroup.add_argument(
@@ -107,9 +107,9 @@ def main() -> None:
         "Association Settings", "Settings for the association analysis."
     )
     assoc_group.add_argument(
-        '-dc',
-        '--drop-constants',
-        action='store_true',
+        "-dc",
+        "--drop-constants",
+        action="store_true",
         help="Drop columns with constant values in the predictors, dependents and covariates. Default is False.",
     )
 
@@ -134,8 +134,8 @@ def main() -> None:
         default=1,
     )
     assoc_group.add_argument(
-        '-mc',
-        '--min-cases',
+        "-mc",
+        "--min-cases",
         type=int,
         default=20,
         help="Minimum number of cases for a dependent variable or PheCode to be included in the analysis. Default is 20.",
@@ -169,22 +169,22 @@ def main() -> None:
     )
     sex_group = assoc_group.add_mutually_exclusive_group(required=False)
     sex_group.add_argument(
-        '-mo',
-        '--male-only',
-        action='store_true',
+        "-mo",
+        "--male-only",
+        action="store_true",
         help="Use only males in the analysis. Default is False.",
     )
     sex_group.add_argument(
-        '-fo',
-        '--female-only',
-        action='store_true',
+        "-fo",
+        "--female-only",
+        action="store_true",
         help="Use only females in the analysis. Default is False.",
     )
     assoc_group.add_argument(
         "--sex-col",
         type=str,
         help="Column name for sex-based analysis. Default is sex.",
-        default='sex',
+        default="sex",
     )
     assoc_group.add_argument(
         "--female-code",
@@ -208,7 +208,7 @@ def main() -> None:
 
 def load_polars_and_limit_threads(args):
     """Polars has to be limited before importing it"""
-    os.environ['POLARS_MAX_THREADS'] = str(args.num_workers)
+    os.environ["POLARS_MAX_THREADS"] = str(args.num_workers)
     import_module("polars")
     mas = import_module("polars_mas.mas")
     threadpool_limits(limits=args.threads_per_worker)
@@ -303,10 +303,12 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
     # Combine the predictors, dependents and covariates into a single list
     args.independents = predictors + covariates
     args.selected_columns = predictors + covariates + dependents
-    
+
     if args.categorical_covariates:
         if not covariates:
-            raise ValueError("Categorical covariates cannot be used without passing them to covariates flag ('-c'/'-ci').")
+            raise ValueError(
+                "Categorical covariates cannot be used without passing them to covariates flag ('-c'/'-ci')."
+            )
         categorical_covariates = args.categorical_covariates.split(",")
         for covariate in categorical_covariates:
             if covariate not in covariates:
@@ -319,7 +321,7 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
         raise ValueError("Quantitative traits must be used with linear based models.")
     if not args.quantitative and args.model in ["linear"]:
         raise ValueError("Binary traits must be used with logistic based models.")
-    
+
     # Check that threads < polars_threads and that polars_threads <= os.cpu_count()
     if args.num_workers > os.cpu_count():
         logger.warning(
@@ -332,25 +334,26 @@ def validate_args(args: argparse.Namespace) -> argparse.Namespace:
         )
         args.threads_per_worker = 1
     if args.flipwas and args.suffix == "predictors":
-        logger.warning('This is a flipped PheWAS analysis. All output files will be merged into {dependent}_flipped.csv to reduce the number of files.')
+        logger.warning(
+            "This is a flipped PheWAS analysis. All output files will be merged into {dependent}_flipped.csv to reduce the number of files."
+        )
         args.suffix = "dependents"
 
     if args.male_only or args.female_only:
         if args.sex_col not in file_col_names:
-            raise ValueError(f"Column {args.sex_col} not found in input file, but specified a sex-specific analysis. Please set the correct sex column name with --sex-col.")
+            raise ValueError(
+                f"Column {args.sex_col} not found in input file, but specified a sex-specific analysis. Please set the correct sex column name with --sex-col."
+            )
     if args.male_code == args.female_code:
-        raise ValueError(f'Female code ({args.female_code}) cannot be equal to the male code ({args.male_code}).')
+        raise ValueError(
+            f"Female code ({args.female_code}) cannot be equal to the male code ({args.male_code})."
+        )
     return args
 
 
 def log_args(args):
     log = "Input arguments:\n"
-    skip_keys = [
-        "null_values",
-        "col_names",
-        "selected_columns",
-        "independents"
-    ]
+    skip_keys = ["null_values", "col_names", "selected_columns", "independents"]
     val_dict = {k: v for k, v in vars(args).items() if k not in skip_keys}
     for key, value in val_dict.items():
         if key in skip_keys:
