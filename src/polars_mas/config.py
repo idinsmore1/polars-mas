@@ -17,12 +17,28 @@ class MASConfig:
     Config class to hold all configuration parameters for the MAS analysis
     """
 
-    analysis_type: Literal["phewas", "flipwas"]
+    # analysis_type: Literal["phewas", "flipwas"]
     input: Path
     output: Path
     predictors: str
     dependents: str
     covariates: str
+    categorical_covariates: str
+    null_values: str | None
+    num_workers: int
+    num_threads: int
+    model: Literal["firth", "logistic", "linear"]
+    min_case_count: int
+    missing_covariate_values: Literal["fail", "drop", "forward", "backward", "min", "max", "mean", "zero", "one"]
+    quantitative: bool
+    rint: bool
+    logt: bool
+    is_phewas: bool
+    is_flipwas: bool
+    sex_col: str
+    female_code: int
+    male_only: bool
+    female_only: bool
 
     # Derived attributes post-init
     reader: FunctionType|partial[pl.LazyFrame]|None = field(default=None, init=False)
@@ -34,6 +50,7 @@ class MASConfig:
     predictor_columns: list[str] = field(default_factory=list, init=False)
     dependent_columns: list[str] = field(default_factory=list, init=False)
     covariate_columns: list[str] = field(default_factory=list, init=False)
+    categorical_covariate_columns: list[str] = field(default_factory=list, init=False)
     included_columns: list[str] = field(default_factory=list, init=False)
 
     def __post_init__(self):
@@ -45,19 +62,20 @@ class MASConfig:
     def _validate_io(self):
         "Validate input and output paths"
         if not self.input.exists():
-            raise ValueError(f"Input file does not exist: {self.input}")
+            raise FileNotFoundError(f"Input file does not exist: {self.input}") 
         if not self.output.parent.exists():
             raise ValueError(f"Output directory does not exist: {self.output.parent}")
         
         # Parse the input columns
+        null_values = None if self.null_values is None else self.null_values.split(',')
         if self.input.suffix == ".parquet":
-            self.reader = pl.scan_parquet
+            self.reader = pl.scan_parquet  # Parquet has nulls defined in schema, don't need a partial
         elif self.input.suffix == ".csv":
-            self.reader = pl.scan_csv
+            self.reader = partial(pl.scan_csv, null_values=null_values)
         elif self.input.suffix == ".tsv":
-            self.reader = partial(pl.scan_csv, separator="\t")
+            self.reader = partial(pl.scan_csv, separator="\t", null_values=null_values)
         elif self.input.suffix == ".txt":
-            self.reader = partial(pl.scan_csv, separator="\t")
+            self.reader = partial(pl.scan_csv, separator="\t", null_values=null_values)
         else:
             raise ValueError(f'Unsupported input file format: {self.input.suffix}')
 
@@ -69,6 +87,7 @@ class MASConfig:
         self.predictor_columns = self._parse_column_list(self.predictors)
         self.dependent_columns = self._parse_column_list(self.dependents)
         self.covariate_columns = self._parse_column_list(self.covariates)
+        self.categorical_covariate_columns = self._parse_column_list(self.categorical_covariates)
 
     def _parse_column_list(self, column_str: str | None) -> list[str]:
         "Parse a single column list argument into a list of column names"
@@ -116,6 +135,7 @@ class MASConfig:
         predictor_set = set(self.predictor_columns)
         dependent_set = set(self.dependent_columns)
         covariate_set = set(self.covariate_columns)
+        cat_covariate_set = set(self.categorical_covariate_columns)
 
         if predictor_set & dependent_set:
             raise ValueError("Predictor and dependent columns must be unique")
@@ -123,6 +143,10 @@ class MASConfig:
             raise ValueError("Predictor and covariate columns must be unique")
         if dependent_set & covariate_set:
             raise ValueError("Dependent and covariate columns must be unique")
+        if not cat_covariate_set:
+            pass
+        elif not cat_covariate_set & covariate_set:
+            raise ValueError("Categorical covariate columns must be a subset of covariate columns")
         included_columns = list(predictor_set | dependent_set | covariate_set)
         # We do this step so that they are ordered in the same order as they appear in the file
         self.included_columns = [col for col in self.column_names if col in included_columns]
@@ -131,18 +155,34 @@ class MASConfig:
     def from_args(cls, args: argparse.Namespace) -> MASConfig:
         """Create a MASConfig from parsed CLI arguments."""
         return cls(
-            analysis_type=args.analysis_type,
+            # analysis_type=args.analysis_type,
             input=args.input,
             output=args.output,
             predictors=args.predictors,
             dependents=args.dependents,
             covariates=args.covariates,
+            categorical_covariates=args.categorical_covariates,
+            null_values=args.null_values,
+            num_workers=args.num_workers,
+            num_threads=args.threads,
+            model=args.model,
+            min_case_count=args.min_case_count,
+            quantitative=args.quantitative,
+            rint=args.rint,
+            logt=args.logt,
+            missing_covariate_values=args.missing_covariate_values,
+            is_phewas=args.phewas,
+            is_flipwas=args.flipwas,
+            sex_col=args.sex_col,
+            female_code=args.female_code,
+            male_only=args.male_only,
+            female_only=args.female_only,
         )
 
     def summary(self):
         logger.info(
             "\nConfiguration summary:\n"
-            f"  Analysis type: {self.analysis_type}\n"
+            # f"  Analysis type: {self.analysis_type}\n"
             f"  Input file: {self.input}\n"
             f"  Output prefix: {self.output}\n"
             f"  Predictors:  {self._format_column_list(self.predictor_columns)}\n"
