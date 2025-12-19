@@ -4,7 +4,7 @@ import polars as pl
 
 from functools import partial
 from loguru import logger
-from polars_mas.consts import male_specific_codes, female_specific_codes, phecode_defs
+from polars_mas.constants import male_specific_codes, female_specific_codes, phecode_defs
 from polars_mas.model_funcs import run_association_test
 
 

@@ -1,6 +1,6 @@
 from polars_mas.cli import parse_args
 from polars_mas.config import MASConfig
-
+from polars_mas.pipeline import run_pipeline
 
 def main():
     args = parse_args()
@@ -9,4 +9,5 @@ def main():
     # If this a dry-run, then stop here
     if args.dry_run:
         return
+    run_pipeline(config)
 

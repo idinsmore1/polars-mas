@@ -5,7 +5,7 @@ import numpy as np
 import statsmodels.api as sm
 from loguru import logger
 from firthlogist import FirthLogisticRegression
-from polars_mas.consts import sex_specific_codes
+from polars_mas.constants import sex_specific_codes
 
 num_completed = 0
 time_per_assoc = 0

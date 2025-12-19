@@ -4,6 +4,7 @@ import argparse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
+from types import FunctionType
 from functools import partial
 from loguru import logger
 
@@ -24,11 +25,16 @@ class MASConfig:
     covariates: str
 
     # Derived attributes post-init
+    reader: FunctionType|partial[pl.LazyFrame]|None = field(default=None, init=False)
     column_names: list[str] = field(default_factory=list, init=False)
-    n_columns: int = field(default_factory=int, init=False)
+    total_column_count: int = field(default_factory=int, init=False)
+    included_column_count: int = field(default_factory=int, init=False)
+    included_row_count: int = field(default_factory=int, init=False)
+    # Column lists
     predictor_columns: list[str] = field(default_factory=list, init=False)
     dependent_columns: list[str] = field(default_factory=list, init=False)
     covariate_columns: list[str] = field(default_factory=list, init=False)
+    included_columns: list[str] = field(default_factory=list, init=False)
 
     def __post_init__(self):
         """Validate and process the inputs after initialization"""
@@ -45,17 +51,18 @@ class MASConfig:
         
         # Parse the input columns
         if self.input.suffix == ".parquet":
-            reader = pl.scan_parquet
+            self.reader = pl.scan_parquet
         elif self.input.suffix == ".csv":
-            reader = pl.scan_csv
+            self.reader = pl.scan_csv
         elif self.input.suffix == ".tsv":
-            reader = partial(pl.scan_csv, separator="\t")
+            self.reader = partial(pl.scan_csv, separator="\t")
         elif self.input.suffix == ".txt":
-            reader = partial(pl.scan_csv, separator="\t")
+            self.reader = partial(pl.scan_csv, separator="\t")
         else:
             raise ValueError(f'Unsupported input file format: {self.input.suffix}')
-        self.column_names = reader(self.input).collect_schema().names()
-        self.n_columns = len(self.column_names)
+
+        self.column_names = self.reader(self.input).collect_schema().names()
+        self.total_column_count = len(self.column_names)
 
     def _parse_column_lists(self) -> None:
         "Parse the column list arguments into lists of column names"
@@ -85,20 +92,20 @@ class MASConfig:
         # Only one column index passed
         if indicies.isnumeric():
             index = int(indicies)
-            if index >= self.n_columns:
-                raise ValueError(f"Index {index} is out of range for input file with {self.n_columns} columns")
+            if index >= self.total_column_count:
+                raise ValueError(f"Index {index} is out of range for input file with {self.total_column_count} columns")
             return [self.column_names[index]]
         # Multiple column indices passed
         elif '-' in indicies:
             start, end = indicies.split('-')
             start = int(start)
             # End is either specified or should be all remaining columns
-            end = int(end) if end != "" else self.n_columns
-            if start >= self.n_columns:
-                raise ValueError(f"Start index {start} is out of range for input file with {self.n_columns} columns")
-            if end > self.n_columns:
+            end = int(end) if end != "" else self.total_column_count
+            if start >= self.total_column_count:
+                raise ValueError(f"Start index {start} is out of range for input file with {self.total_column_count} columns")
+            if end > self.total_column_count:
                 raise ValueError(
-                    f"End index {end} out of range for {self.n_columns} columns. If you want to use all remaining columns, use {start}-."
+                    f"End index {end} out of range for {self.total_column_count} columns. If you want to use all remaining columns, use {start}-."
                 )
             return self.column_names[start:end]
         else:
@@ -116,6 +123,9 @@ class MASConfig:
             raise ValueError("Predictor and covariate columns must be unique")
         if dependent_set & covariate_set:
             raise ValueError("Dependent and covariate columns must be unique")
+        included_columns = list(predictor_set | dependent_set | covariate_set)
+        # We do this step so that they are ordered in the same order as they appear in the file
+        self.included_columns = [col for col in self.column_names if col in included_columns]
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> MASConfig:
@@ -151,3 +161,14 @@ class MASConfig:
         # Show first 2 and last 2 with count
         preview = f"{columns[0]}, {columns[1]}, ... {columns[-2]}, {columns[-1]}"
         return f"{n} columns: {preview}"
+    
+    def read_data(self) -> pl.LazyFrame:
+        if self.reader is None:
+            raise ValueError("Reader function is not set.")
+        lf = self.reader(self.input).select(self.included_columns)
+        self.included_column_count = lf.collect_schema().len()
+        self.included_row_count = lf.select(pl.len()).collect().item()
+        logger.info(
+            f"Successfully read {self.input.name} and selected {self.included_row_count} rows and {self.included_column_count} columns"
+        )
+        return lf
