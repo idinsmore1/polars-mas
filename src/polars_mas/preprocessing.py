@@ -1,0 +1,81 @@
+import polars as pl
+from loguru import logger
+from polars_mas.config import MASConfig
+
+def handle_missing_covariates(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame:
+    """Handle missing covariate values based on the configuration"""
+    if config.missing_covariate_values == "fail":
+        missing_counts = (
+            lf
+            .select(pl.col(config.covariate_columns).null_count())
+            .collect()
+            .to_dicts()
+        )
+        for col, count in missing_counts[0].items():
+            if count == config.included_row_count:
+                raise ValueError(f"All values are missing in covariate column '{col}'.")
+            if count > 0:
+                raise ValueError(f"Missing values found in covariate column '{col}': {count} missing values.")
+        return lf
+    elif config.missing_covariate_values == "drop":
+        original_row_count = config.included_row_count
+        lf = lf.drop_nulls(subset=config.covariate_columns)
+        config.update_row_and_column_counts(lf)
+        if config.included_row_count < original_row_count:
+            logger.warning(
+                f"Dropped {original_row_count - config.included_row_count} rows due to missing covariate values."
+            )
+        return lf
+    else:
+        fill_value = {
+            "forward": pl.col(config.covariate_columns).fill_null(strategy="forward"),
+            "backward": pl.col(config.covariate_columns).fill_null(strategy="backward"),
+            "min": pl.col(config.covariate_columns).fill_null(pl.col(config.covariate_columns).min()),
+            "max": pl.col(config.covariate_columns).fill_null(pl.col(config.covariate_columns).max()),
+            "mean": pl.col(config.covariate_columns).fill_null(pl.col(config.covariate_columns).mean()),
+            "zero": 0,
+            "one": 1,
+        }.get(config.missing_covariate_values, None)
+        if fill_value is not None:
+            return lf.fill_null(fill_value)
+    return lf
+
+def limit_sex_specific(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame:
+    """Limit data to a specific sex if specified in the configuration"""
+    if not config.male_only and not config.female_only:
+        return lf
+    original_row_count = config.included_row_count
+    if config.sex_col not in config.included_columns:
+        raise ValueError(f"Sex column '{config.sex_col}' not found in included columns.")
+    if config.male_only:
+        logger.info("Limiting analysis to male samples only.")
+        sex_specific = lf.filter(pl.col(config.sex_col) != config.female_code)
+        config.update_row_and_column_counts(sex_specific)
+    else:
+        logger.info("Limiting analysis to female samples only.")
+        sex_specific = lf.filter(pl.col(config.sex_col) == config.female_code)
+        config.update_row_and_column_counts(sex_specific)
+    if config.included_row_count <= original_row_count:
+        logger.success(
+            f"Dropped {original_row_count - config.included_row_count} rows for {'male' if config.male_only else 'female'} specific analysis."
+        )
+    return sex_specific
+
+def drop_constant_covariates(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame:
+    """Drop covariate columns that are constant (no variance)"""
+    constant_covariates = []
+    unique_counts = (
+        lf
+        .select(pl.col(config.covariate_columns).n_unique())
+        .collect()
+        .to_dicts()
+    )
+    for col, count in unique_counts[0].items():
+        if count <= 1:
+            constant_covariates.append(col)
+    if constant_covariates:
+        logger.warning(f"Dropping constant covariate columns: {', '.join(constant_covariates)}")
+        lf = lf.drop(constant_covariates)
+        config.covariate_columns = [col for col in config.covariate_columns if col not in constant_covariates]
+        config.update_row_and_column_counts(lf)
+    return lf

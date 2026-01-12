@@ -29,7 +29,9 @@ class MASConfig:
     num_threads: int
     model: Literal["firth", "logistic", "linear"]
     min_case_count: int
-    missing_covariate_values: Literal["fail", "drop", "forward", "backward", "min", "max", "mean", "zero", "one"]
+    missing_covariate_values: Literal[
+        "fail", "drop", "forward", "backward", "min", "max", "mean", "zero", "one"
+    ]
     quantitative: bool
     rint: bool
     logt: bool
@@ -41,7 +43,7 @@ class MASConfig:
     female_only: bool
 
     # Derived attributes post-init
-    reader: FunctionType|partial[pl.LazyFrame]|None = field(default=None, init=False)
+    reader: FunctionType | partial[pl.LazyFrame] | None = field(default=None, init=False)
     column_names: list[str] = field(default_factory=list, init=False)
     total_column_count: int = field(default_factory=int, init=False)
     included_column_count: int = field(default_factory=int, init=False)
@@ -62,12 +64,12 @@ class MASConfig:
     def _validate_io(self):
         "Validate input and output paths"
         if not self.input.exists():
-            raise FileNotFoundError(f"Input file does not exist: {self.input}") 
+            raise FileNotFoundError(f"Input file does not exist: {self.input}")
         if not self.output.parent.exists():
             raise ValueError(f"Output directory does not exist: {self.output.parent}")
-        
+
         # Parse the input columns
-        null_values = None if self.null_values is None else self.null_values.split(',')
+        null_values = None if self.null_values is None else self.null_values.split(",")
         if self.input.suffix == ".parquet":
             self.reader = pl.scan_parquet  # Parquet has nulls defined in schema, don't need a partial
         elif self.input.suffix == ".csv":
@@ -77,7 +79,7 @@ class MASConfig:
         elif self.input.suffix == ".txt":
             self.reader = partial(pl.scan_csv, separator="\t", null_values=null_values)
         else:
-            raise ValueError(f'Unsupported input file format: {self.input.suffix}')
+            raise ValueError(f"Unsupported input file format: {self.input.suffix}")
 
         self.column_names = self.reader(self.input).collect_schema().names()
         self.total_column_count = len(self.column_names)
@@ -93,11 +95,11 @@ class MASConfig:
         "Parse a single column list argument into a list of column names"
         if column_str is None:
             return []
-        col_splits = column_str.split(',')
+        col_splits = column_str.split(",")
         column_list = []
         for col in col_splits:
             # Indexed columns start with the 'i:' identifier
-            if col[:2] == 'i:':
+            if col[:2] == "i:":
                 column_list.extend(self._extract_indexed_columns(col))
             else:
                 if col not in self.column_names:
@@ -107,29 +109,35 @@ class MASConfig:
 
     def _extract_indexed_columns(self, index_str: str) -> list[str]:
         "Extract the column indicies from an index column string"
-        indicies = index_str.split(':')[-1]
+        indicies = index_str.split(":")[-1]
         # Only one column index passed
         if indicies.isnumeric():
             index = int(indicies)
             if index >= self.total_column_count:
-                raise ValueError(f"Index {index} is out of range for input file with {self.total_column_count} columns")
+                raise ValueError(
+                    f"Index {index} is out of range for input file with {self.total_column_count} columns"
+                )
             return [self.column_names[index]]
         # Multiple column indices passed
-        elif '-' in indicies:
-            start, end = indicies.split('-')
+        elif "-" in indicies:
+            start, end = indicies.split("-")
             start = int(start)
             # End is either specified or should be all remaining columns
             end = int(end) if end != "" else self.total_column_count
             if start >= self.total_column_count:
-                raise ValueError(f"Start index {start} is out of range for input file with {self.total_column_count} columns")
+                raise ValueError(
+                    f"Start index {start} is out of range for input file with {self.total_column_count} columns"
+                )
             if end > self.total_column_count:
                 raise ValueError(
                     f"End index {end} out of range for {self.total_column_count} columns. If you want to use all remaining columns, use {start}-."
                 )
             return self.column_names[start:end]
         else:
-            raise ValueError('Invalid index format. Please use i:<index>, i:<start>-<end>, or i:<start>-.')
-        
+            raise ValueError(
+                "Invalid index format. Please use i:<index>, i:<start>-<end>, or i:<start>-."
+            )
+
     def _assert_unique_column_sets(self):
         "Ensure that the predictor, dependent, and covariate columns are unique"
         predictor_set = set(self.predictor_columns)
@@ -201,14 +209,18 @@ class MASConfig:
         # Show first 2 and last 2 with count
         preview = f"{columns[0]}, {columns[1]}, ... {columns[-2]}, {columns[-1]}"
         return f"{n} columns: {preview}"
-    
+
     def read_data(self) -> pl.LazyFrame:
         if self.reader is None:
             raise ValueError("Reader function is not set.")
         lf = self.reader(self.input).select(self.included_columns)
-        self.included_column_count = lf.collect_schema().len()
-        self.included_row_count = lf.select(pl.len()).collect().item()
+        self.update_row_and_column_counts(lf)
         logger.info(
             f"Successfully read {self.input.name} and selected {self.included_row_count} rows and {self.included_column_count} columns"
         )
         return lf
+
+    def update_row_and_column_counts(self, lf: pl.LazyFrame) -> None:
+        """Update the included row and column counts based on a LazyFrame"""
+        self.included_column_count = lf.collect_schema().len()
+        self.included_row_count = lf.select(pl.len()).collect().item()
