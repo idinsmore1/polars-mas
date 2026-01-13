@@ -79,3 +79,33 @@ def drop_constant_covariates(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFram
         config.covariate_columns = [col for col in config.covariate_columns if col not in constant_covariates]
         config.update_row_and_column_counts(lf)
     return lf
+
+
+def create_dummy_covariates(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame:
+    """Create dummy variables for categorical covariates"""
+    # If there are no categorical covariates, return the original LazyFrame
+    if not config.categorical_covariate_columns:
+        return lf
+    unique_counts = (
+        lf
+        .select(pl.col(config.categorical_covariate_columns).implode().list.unique())
+        .unique()
+        .collect()
+        .to_dicts()
+    )
+    new_cols = []
+    for col, values in unique_counts[0].items():
+        if len(values) > 2:
+            # Skip the first value to avoid multicollinearity
+            new_cols.extend([f"{col}_{value}" for value in values[1:]])
+            lf = (
+                lf
+                .with_columns([
+                    pl.when(pl.col(col) == value).then(1).otherwise(0).alias(f"{col}_{value}")
+                    for value in values[1:]
+                ])
+                .drop(col)
+            )
+    config.covariate_columns = [col for col in config.covariate_columns if col not in config.categorical_covariate_columns] + new_cols
+    config.update_row_and_column_counts(lf)
+    return lf

@@ -9,7 +9,6 @@ import time
 
 def run_associations(lf: pl.LazyFrame, config: MASConfig) -> pl.DataFrame:
     """Run association analyses based on the configuration"""
-    # TODO: Implement association analysis logic here
     num_predictors = len(config.predictor_columns)
     num_dependents = len(config.dependent_columns)
     num_groups = num_predictors * num_dependents
@@ -77,7 +76,6 @@ def _run_association(association_struct: pl.Struct, predictor: str, dependent: s
         raise ValueError(f"Model '{config.model}' is not supported.")
 
     output_struct = _get_schema(config, for_polars=False)
-        # TODO: add linear and logistic output structs
     # create a dataframe from the struct
     data = association_struct.struct.unnest()
     # drop null values in the predictor and dependent
@@ -117,6 +115,8 @@ def _run_association(association_struct: pl.Struct, predictor: str, dependent: s
                 "failed_reason": f"Not enough observations ({data.height}).",
             })
             return output_struct
+        else:
+            output_struct.update({'n_observations': data.height})
     # Prepare the data for regression
     data = _drop_constant_covariates(data, config)
     col_names = data.collect_schema().names()
@@ -190,6 +190,7 @@ def _get_schema(config: MASConfig, for_polars=True) -> pl.Struct|dict:
                 "cases": pl.Int64,
                 "controls": pl.Int64,
                 "total_n": pl.Int64,
+                "converged": pl.Boolean,
                 "failed_reason": pl.Utf8,
                 "equation": pl.Utf8
             })
@@ -206,6 +207,7 @@ def _get_schema(config: MASConfig, for_polars=True) -> pl.Struct|dict:
                 "cases": -9,
                 "controls": -9,
                 "total_n": -9,
+                "converged": False,
                 "failed_reason": "nan",
                 "equation": "nan",
             }
@@ -220,6 +222,7 @@ def _get_schema(config: MASConfig, for_polars=True) -> pl.Struct|dict:
                 "ci_low": pl.Float64,
                 "ci_high": pl.Float64,
                 "n_observations": pl.Int64,
+                "converged": False,
                 "failed_reason": pl.Utf8,
                 "equation": pl.Utf8
             })
@@ -233,6 +236,7 @@ def _get_schema(config: MASConfig, for_polars=True) -> pl.Struct|dict:
                 "ci_low": float("nan"),
                 "ci_high": float("nan"),
                 "cases": -9,
+                "converged": False,
                 "failed_reason": "nan",
                 "equation": "nan",
             }

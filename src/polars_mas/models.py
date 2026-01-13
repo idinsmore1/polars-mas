@@ -1,6 +1,8 @@
+import warnings
 import polars as pl
 import numpy as np
 import statsmodels.api as sm
+from sklearn.exceptions import ConvergenceWarning
 from firthmodels import FirthLogisticRegression
 
 def firth_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
@@ -18,16 +20,22 @@ def firth_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
     dict
         The results of the regression.
     """
-    fl = FirthLogisticRegression()
-    fl.fit(X, y)
-    return {
-        "pval": fl.pvalues_[0],
-        "beta": fl.coef_[0],
-        "se": fl.bse_[0],
-        "OR": np.e ** fl.coef_[0],
-        "ci_low": fl.conf_int()[0][0],
-        "ci_high": fl.conf_int()[0][1],
-    }
+    with warnings.catch_warnings(record=True) as w:
+        converged = True
+        fl = FirthLogisticRegression(max_iter=1000)
+        fl.fit(X, y)
+        for warning in w:
+            if issubclass(warning.category, ConvergenceWarning):
+                converged = False
+        return {
+            "pval": fl.pvalues_[0],
+            "beta": fl.coef_[0],
+            "se": fl.bse_[0],
+            "OR": np.e ** fl.coef_[0],
+            "converged": converged,
+            "ci_low": fl.conf_int()[0][0],
+            "ci_high": fl.conf_int()[0][1],
+        }
 
 
 def logistic_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
@@ -40,6 +48,7 @@ def logistic_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
         "beta": result.params[0],
         "se": result.bse[0],
         "OR": np.e ** result.params[0],
+        "converged": result.converged,
         "ci_low": result.conf_int()[0][0],
         "ci_high": result.conf_int()[0][1],
     }
@@ -53,6 +62,7 @@ def linear_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
         "pval": result.pvalues[0],
         "beta": result.params[0],
         "se": result.bse[0],
+        "converged": True,
         "ci_low": result.conf_int()[0][0],
         "ci_high": result.conf_int()[0][1],
     }
