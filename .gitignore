@@ -10,6 +10,7 @@ test.sh
 test_aorta.sh
 results/
 example_data/*.csv
+src/tests/debug_results.csv
 *.log
 .ruff_cache/
 dist/

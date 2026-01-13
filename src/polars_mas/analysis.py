@@ -31,9 +31,16 @@ def run_associations(lf: pl.LazyFrame, config: MASConfig) -> pl.DataFrame:
     if not result_lazyframes:
         logger.error("No valid analyses were performed. Please check your configuration and data.")
         return pl.DataFrame()
-    # Combine all result lazyframes into one
-    results = pl.collect_all(result_lazyframes)
-    result_combined = pl.concat([result.unnest('result') for result in results], how='diagonal_relaxed').sort('pval')
+    # Collect in batches with progress
+    batch_size = min(100, max(10, num_groups // 10))
+    all_results = []
+    for i in range(0, len(result_lazyframes), batch_size):
+        batch = result_lazyframes[i:i+batch_size]
+        results = pl.collect_all(batch)
+        all_results.extend(results)
+        completed = min(i + batch_size, len(result_lazyframes))
+        logger.success(f"Progress: {completed}/{num_groups} ({100*completed//num_groups}%)")
+    result_combined = pl.concat([result.unnest('result') for result in all_results], how='diagonal_relaxed').sort('pval')
     result_combined.write_csv('/home/irdinsmore1/projects/polars-mas/src/tests/debug_results.csv')
     return result_combined
 
@@ -41,37 +48,18 @@ def perform_analysis(lf: pl.LazyFrame, predictor: str, dependent: str, config: M
     """Perform the actual analysis for a given predictor and dependent variable"""
     # Select only the relevant columns and drop missing values in the predictor and dependent
     columns = [predictor, dependent, *config.covariate_columns]
-    analysis_lf = lf.select(columns).drop_nulls()
-    # If not a quantitative dependent variable, check the case count
-    # if not config.quantitative:
-    #     # Check min case count 
-    #     case_count = (
-    #         analysis_lf
-    #         .select(pl.col(dependent).sum())
-    #         .collect()
-    #         .item()
-    #     )
-    #     controls_count = n_rows - case_count
-    #     if case_count < config.min_case_count:
-    #         logger.warning(f"Skipping analysis for predictor '{predictor}' and dependent '{dependent}' due to insufficient case count ({case_count} cases, minimum required is {config.min_case_count}).")
-    #         return None
-    #     elif controls_count < config.min_case_count:
-    #         logger.warning(f"Skipping analysis for predictor '{predictor}' and dependent '{dependent}' due to insufficient control count ({controls_count} controls, minimum required is {config.min_case_count}).")
-    #         return None
-    #     elif case_count == n_rows:
-    #         logger.warning(f"Skipping analysis for predictor '{predictor}' and dependent '{dependent}' as all observations are cases.")
-    #         return None
+    analysis_lf = lf.select(columns)
     model_func = partial(_run_association, predictor=predictor, dependent=dependent, config=config)
-    with threadpool_limits(config.num_threads):
-        result_lf = (
-            analysis_lf
-            .select(pl.struct(columns).alias('association_struct'))
-            .select(
-                pl.col('association_struct')
-                .map_batches(model_func, returns_scalar=True, return_dtype=pl.Struct)
-                .alias('result')
-            )
+    expected_schema = _get_schema(config)
+    result_lf = (
+        analysis_lf
+        .select(pl.struct(columns).alias('association_struct'))
+        .select(
+            pl.col('association_struct')
+            .map_batches(model_func, returns_scalar=True, return_dtype=expected_schema)
+            .alias('result')
         )
+    )
     return result_lf
 
 
@@ -139,22 +127,24 @@ def _run_association(association_struct: pl.Struct, predictor: str, dependent: s
     equation = f"{dependent} ~ {predictor} + {' + '.join(covariates)}"
     X = data.select([predictor, *covariates])
     y = data.get_column(dependent).to_numpy()
-    try:
-        results = reg_func(X, y)
-        results.update({
-            "predictor": predictor,
-            "dependent": dependent,
-            "equation": equation,
-        })
-        return results
-    except Exception as e:
-        logger.error(f"Error in {config.model} regression for predictor '{predictor}' and dependent '{dependent}': {e}")
-        return {
-            "predictor": predictor,
-            "dependent": dependent,
-            "equation": equation,
-            "failed_reason": str(e),
-        }
+    with threadpool_limits(config.num_threads):
+        try:
+            results = reg_func(X, y)
+            output_struct.update({
+                "predictor": predictor,
+                "dependent": dependent,
+                "equation": equation,
+                **results
+            })
+            return output_struct
+        except Exception as e:
+            logger.error(f"Error in {config.model} regression for predictor '{predictor}' and dependent '{dependent}': {e}")
+            return output_struct.update({
+                "predictor": predictor,
+                "dependent": dependent,
+                "equation": equation,
+                "failed_reason": str(e),
+            })
     
 def _check_case_counts(struct_dataframe: pl.DataFrame, dependent: str, min_case_count: int) -> tuple[bool, str, int, int, int]:
     """Check if the case and control counts meet the minimum requirements"""
@@ -184,3 +174,23 @@ def _drop_constant_covariates(struct_dataframe: pl.DataFrame, config: MASConfig)
         logger.debug(f"Dropping constant covariate columns: {', '.join(constant_covariates)}")
         struct_dataframe = struct_dataframe.drop(constant_covariates)
     return struct_dataframe
+
+
+def _get_schema(config: MASConfig) -> pl.Struct:
+    if config.model == "firth" or config.model == "logistic":
+        return pl.Struct({
+            "predictor": pl.Utf8,
+            "dependent": pl.Utf8,
+            "pval": pl.Float64,
+            "beta": pl.Float64,
+            "se": pl.Float64,
+            "OR": pl.Float64,
+            "ci_low": pl.Float64,
+            "ci_high": pl.Float64,
+            "cases": pl.Int64,
+            "controls": pl.Int64,
+            "total_n": pl.Int64,
+            "failed_reason": pl.Utf8,
+            "equation": pl.Utf8
+        })
+    

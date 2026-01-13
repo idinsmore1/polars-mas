@@ -106,7 +106,7 @@ def create_parser() -> argparse.ArgumentParser:
         "--min-case-count",
         type=int,
         default=20,
-        help="Minimum count of observations required for an association to be considered. Default is 20.",
+        help="Minimum count of observations required for an association to be considered. Default is 20. Also works as the minimum observation count for linear regression.",
     )
     param_group.add_argument(
         "-mcv",
@@ -146,6 +146,13 @@ def create_parser() -> argparse.ArgumentParser:
     )
     sex_specific_group.add_argument(
         "--female-only", action="store_true", help="Include only female samples in the analysis."
+    )
+    verbosity_group = parser.add_mutually_exclusive_group()
+    verbosity_group.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose logging."
+    )
+    verbosity_group.add_argument(
+        "-q", "--quiet", action="store_true", help="Suppress most logging output."
     )
     return parser
 

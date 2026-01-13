@@ -10,6 +10,8 @@ from polars_mas.analysis import run_associations
 
 def run_pipeline(config: MASConfig):
     # Read in the data
+    config.setup_logger()
+    logger.debug('testing debug log')
     data = config.read_data()
     # Preprocessing steps
     logger.info("Starting preprocessing...")

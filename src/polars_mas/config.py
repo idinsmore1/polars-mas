@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
+import sys
 import argparse
+import polars as pl
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -8,7 +12,7 @@ from types import FunctionType
 from functools import partial
 from loguru import logger
 
-import polars as pl
+
 
 
 @dataclass
@@ -41,6 +45,8 @@ class MASConfig:
     female_code: int
     male_only: bool
     female_only: bool
+    verbose: bool
+    quiet: bool
 
     # Derived attributes post-init
     reader: FunctionType | partial[pl.LazyFrame] | None = field(default=None, init=False)
@@ -60,6 +66,38 @@ class MASConfig:
         self._validate_io()
         self._parse_column_lists()
         self._assert_unique_column_sets()
+
+    def setup_logger(self):
+        logger.remove()
+        if self.quiet:
+            logger.add(
+                sys.stdout,
+                level='SUCCESS',
+                filter= lambda record: record["level"].no <= 25,
+                enqueue=True
+            )
+            logger.add(sys.stderr, level='ERROR', enqueue=True)
+        elif self.verbose:
+            logger.add(
+                sys.stdout,
+                level='DEBUG',
+                filter=lambda record: record["level"].no <= 25,
+                enqueue=True
+            )
+            logger.add(sys.stderr, level='WARNING', enqueue=True)
+        else:
+            # Show everything above INFO
+            logger.add(
+                sys.stdout,
+                level="INFO",
+                filter=lambda record: record["level"].no <= 25,
+                enqueue=True,
+            )
+            logger.add(
+                sys.stderr,
+                level="WARNING",
+                enqueue=True,
+            )
 
     def _validate_io(self):
         "Validate input and output paths"
@@ -185,6 +223,8 @@ class MASConfig:
             female_code=args.female_code,
             male_only=args.male_only,
             female_only=args.female_only,
+            verbose=args.verbose,
+            quiet=args.quiet
         )
 
     def summary(self):
@@ -193,6 +233,8 @@ class MASConfig:
             # f"  Analysis type: {self.analysis_type}\n"
             f"  Input file: {self.input}\n"
             f"  Output prefix: {self.output}\n"
+            f"  Max Polars Threads: {pl.thread_pool_size()}\n"
+            f"  Max Computation Threads: {self.num_threads}\n"
             f"  Predictors:  {self._format_column_list(self.predictor_columns)}\n"
             f"  Dependents:  {self._format_column_list(self.dependent_columns)}\n"
             f"  Covariates:  {self._format_column_list(self.covariate_columns)}"

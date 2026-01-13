@@ -5,7 +5,7 @@ description = "polars-mas - a fast multiple association library for python backe
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "firthmodels>=0.2.0",
+    "firthmodels>=0.4.0",
     "loguru>=0.7.2",
     "polars>=1.9.0",
     "pyarrow>=22.0.0",
