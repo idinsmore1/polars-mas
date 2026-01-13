@@ -4,7 +4,8 @@ from loguru import logger
 from threadpoolctl import threadpool_limits
 from polars_mas.config import MASConfig
 from polars_mas.preprocessing import drop_constant_covariates
-from polars_mas.models import firth_regression
+from polars_mas.models import firth_regression, logistic_regression, linear_regression
+import time
 
 def run_associations(lf: pl.LazyFrame, config: MASConfig) -> pl.DataFrame:
     """Run association analyses based on the configuration"""
@@ -40,6 +41,7 @@ def run_associations(lf: pl.LazyFrame, config: MASConfig) -> pl.DataFrame:
         all_results.extend(results)
         completed = min(i + batch_size, len(result_lazyframes))
         logger.success(f"Progress: {completed}/{num_groups} ({100*completed//num_groups}%)")
+
     result_combined = pl.concat([result.unnest('result') for result in all_results], how='diagonal_relaxed').sort('pval')
     result_combined.write_csv('/home/irdinsmore1/projects/polars-mas/src/tests/debug_results.csv')
     return result_combined
@@ -67,28 +69,14 @@ def _run_association(association_struct: pl.Struct, predictor: str, dependent: s
     """Run the specified association model on the given data structure"""
     model_funcs = {
         "firth": firth_regression,
-        # "logistic": logistic_regression,
-        # "linear": linear_regression,
+        "logistic": logistic_regression,
+        "linear": linear_regression,
     }
     reg_func = model_funcs.get(config.model, None)
     if reg_func is None:
         raise ValueError(f"Model '{config.model}' is not supported.")
-    if config.model == "firth":
-        output_struct = {
-            "predictor": "nan",
-            "dependent": "nan",
-            "pval": float("nan"),
-            "beta": float("nan"),
-            "se": float("nan"),
-            "OR": float("nan"),
-            "ci_low": float("nan"),
-            "ci_high": float("nan"),
-            "cases": -9,
-            "controls": -9,
-            "total_n": -9,
-            "failed_reason": "nan",
-            "equation": "nan",
-        }
+
+    output_struct = _get_schema(config, for_polars=False)
         # TODO: add linear and logistic output structs
     # create a dataframe from the struct
     data = association_struct.struct.unnest()
@@ -103,10 +91,11 @@ def _run_association(association_struct: pl.Struct, predictor: str, dependent: s
             "failed_reason": "No data after dropping nulls.",
         })
         return output_struct
+    # Do check on case counts for non-quantitative outcomes
     if not config.quantitative:
         is_viable, message, case_count, controls_count, total_n = _check_case_counts(data, dependent, config.min_case_count)
         if not is_viable:
-            logger.warning(f"Skipping analysis for predictor '{predictor}' and dependent '{dependent}': {message}")
+            logger.debug(f"Skipping analysis for predictor '{predictor}' and dependent '{dependent}': {message}")
             output_struct.update({
                 "predictor": predictor,
                 "dependent": dependent,
@@ -119,6 +108,16 @@ def _run_association(association_struct: pl.Struct, predictor: str, dependent: s
                 "controls": controls_count,
                 "total_n": total_n,
             })
+    else:
+        if data.height < config.min_case_count:
+            logger.debug(f"Skipping analysis for predictor '{predictor}' and dependent '{dependent}': Not enough observations ({data.height}).")
+            output_struct.update({
+                "predictor": predictor,
+                "dependent": dependent,
+                "failed_reason": f"Not enough observations ({data.height}).",
+            })
+            return output_struct
+    # Prepare the data for regression
     data = _drop_constant_covariates(data, config)
     col_names = data.collect_schema().names()
     predictor = col_names[0]
@@ -176,21 +175,64 @@ def _drop_constant_covariates(struct_dataframe: pl.DataFrame, config: MASConfig)
     return struct_dataframe
 
 
-def _get_schema(config: MASConfig) -> pl.Struct:
+def _get_schema(config: MASConfig, for_polars=True) -> pl.Struct|dict:
     if config.model == "firth" or config.model == "logistic":
-        return pl.Struct({
-            "predictor": pl.Utf8,
-            "dependent": pl.Utf8,
-            "pval": pl.Float64,
-            "beta": pl.Float64,
-            "se": pl.Float64,
-            "OR": pl.Float64,
-            "ci_low": pl.Float64,
-            "ci_high": pl.Float64,
-            "cases": pl.Int64,
-            "controls": pl.Int64,
-            "total_n": pl.Int64,
-            "failed_reason": pl.Utf8,
-            "equation": pl.Utf8
-        })
-    
+        if for_polars:
+            return pl.Struct({
+                "predictor": pl.Utf8,
+                "dependent": pl.Utf8,
+                "pval": pl.Float64,
+                "beta": pl.Float64,
+                "se": pl.Float64,
+                "OR": pl.Float64,
+                "ci_low": pl.Float64,
+                "ci_high": pl.Float64,
+                "cases": pl.Int64,
+                "controls": pl.Int64,
+                "total_n": pl.Int64,
+                "failed_reason": pl.Utf8,
+                "equation": pl.Utf8
+            })
+        else:
+            return {
+                "predictor": "nan",
+                "dependent": "nan",
+                "pval": float("nan"),
+                "beta": float("nan"),
+                "se": float("nan"),
+                "OR": float("nan"),
+                "ci_low": float("nan"),
+                "ci_high": float("nan"),
+                "cases": -9,
+                "controls": -9,
+                "total_n": -9,
+                "failed_reason": "nan",
+                "equation": "nan",
+            }
+    if config.model == "linear":
+        if for_polars:
+            return pl.Struct({
+                "predictor": pl.Utf8,
+                "dependent": pl.Utf8,
+                "pval": pl.Float64,
+                "beta": pl.Float64,
+                "se": pl.Float64,
+                "ci_low": pl.Float64,
+                "ci_high": pl.Float64,
+                "n_observations": pl.Int64,
+                "failed_reason": pl.Utf8,
+                "equation": pl.Utf8
+            })
+        else:
+            return {
+                "predictor": "nan",
+                "dependent": "nan",
+                "pval": float("nan"),
+                "beta": float("nan"),
+                "se": float("nan"),
+                "ci_low": float("nan"),
+                "ci_high": float("nan"),
+                "cases": -9,
+                "failed_reason": "nan",
+                "equation": "nan",
+            }
