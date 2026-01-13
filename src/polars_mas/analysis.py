@@ -42,7 +42,7 @@ def run_associations(lf: pl.LazyFrame, config: MASConfig) -> pl.DataFrame:
         logger.success(f"Progress: {completed}/{num_groups} ({100*completed//num_groups}%)")
 
     result_combined = pl.concat([result.unnest('result') for result in all_results], how='diagonal_relaxed').sort('pval')
-    result_combined.write_csv('/home/irdinsmore1/projects/polars-mas/src/tests/debug_results.csv')
+    logger.success("Association analyses completed successfully!")
     return result_combined
 
 def perform_analysis(lf: pl.LazyFrame, predictor: str, dependent: str, config: MASConfig) -> pl.LazyFrame:

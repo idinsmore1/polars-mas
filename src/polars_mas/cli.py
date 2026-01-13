@@ -58,6 +58,14 @@ def create_parser() -> argparse.ArgumentParser:
         help="Specify the values to be considered as null/missing in the input data (comma separated list). Default is None (polars default)",
         default=None,
     )
+    input_group.add_argument(
+        '-ot',
+        '--output-type',
+        type=str,
+        choices=["parquet", "csv", "tsv", "txt"],
+        default="csv",
+        help="Specify the output file type. Default is csv.",
+    )
     # Association Parameters
     param_group = parser.add_argument_group(
         "Association Parameters", "Options for specifying association parameters"

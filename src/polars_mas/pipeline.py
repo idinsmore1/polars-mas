@@ -7,6 +7,7 @@ from polars_mas.preprocessing import (
     drop_constant_covariates,
     create_dummy_covariates
 )
+from polars_mas.postprocessing import postprocess
 from polars_mas.analysis import run_associations
 
 def run_pipeline(config: MASConfig):
@@ -23,5 +24,6 @@ def run_pipeline(config: MASConfig):
     logger.success("Preprocessing completed.")
     # Analysis steps
     results = run_associations(data, config)
+    results = postprocess(results, config)
     # TODO add post-processing of results with multiple testing p-value threshold, annotations, and file saving
     print(results)

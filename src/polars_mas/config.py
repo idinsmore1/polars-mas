@@ -47,6 +47,7 @@ class MASConfig:
     female_only: bool
     verbose: bool
     quiet: bool
+    output_type: Literal["parquet", "csv", "tsv", "txt"]
 
     # Derived attributes post-init
     reader: FunctionType | partial[pl.LazyFrame] | None = field(default=None, init=False)
@@ -224,7 +225,8 @@ class MASConfig:
             male_only=args.male_only,
             female_only=args.female_only,
             verbose=args.verbose,
-            quiet=args.quiet
+            quiet=args.quiet,
+            output_type=args.output_type
         )
 
     def summary(self):
