@@ -5,10 +5,11 @@ from polars_mas.preprocessing import (
     handle_missing_covariates,
     limit_sex_specific,
     drop_constant_covariates,
-    create_dummy_covariates
+    create_dummy_covariates,
 )
 from polars_mas.postprocessing import postprocess
 from polars_mas.analysis import run_associations
+
 
 def run_pipeline(config: MASConfig):
     # Read in the data

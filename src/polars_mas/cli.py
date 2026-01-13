@@ -59,8 +59,8 @@ def create_parser() -> argparse.ArgumentParser:
         default=None,
     )
     input_group.add_argument(
-        '-ot',
-        '--output-type',
+        "-ot",
+        "--output-type",
         type=str,
         choices=["parquet", "csv", "tsv", "txt"],
         default="csv",
@@ -156,9 +156,7 @@ def create_parser() -> argparse.ArgumentParser:
         "--female-only", action="store_true", help="Include only female samples in the analysis."
     )
     verbosity_group = parser.add_mutually_exclusive_group()
-    verbosity_group.add_argument(
-        "-v", "--verbose", action="store_true", help="Enable verbose logging."
-    )
+    verbosity_group.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
     verbosity_group.add_argument(
         "-q", "--quiet", action="store_true", help="Suppress most logging output."
     )

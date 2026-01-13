@@ -2,20 +2,18 @@ import polars as pl
 from loguru import logger
 from polars_mas.config import MASConfig
 
+
 def handle_missing_covariates(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame:
     """Handle missing covariate values based on the configuration"""
     if config.missing_covariate_values == "fail":
-        missing_counts = (
-            lf
-            .select(pl.col(config.covariate_columns).null_count())
-            .collect()
-            .to_dicts()
-        )
+        missing_counts = lf.select(pl.col(config.covariate_columns).null_count()).collect().to_dicts()
         for col, count in missing_counts[0].items():
             if count == config.included_row_count:
                 raise ValueError(f"All values are missing in covariate column '{col}'.")
             if count > 0:
-                raise ValueError(f"Missing values found in covariate column '{col}': {count} missing values.")
+                raise ValueError(
+                    f"Missing values found in covariate column '{col}': {count} missing values."
+                )
         return lf
     elif config.missing_covariate_values == "drop":
         original_row_count = config.included_row_count
@@ -40,6 +38,7 @@ def handle_missing_covariates(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFra
             return lf.fill_null(fill_value)
     return lf
 
+
 def limit_sex_specific(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame:
     """Limit data to a specific sex if specified in the configuration"""
     if not config.male_only and not config.female_only:
@@ -61,22 +60,20 @@ def limit_sex_specific(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame:
         )
     return sex_specific
 
+
 def drop_constant_covariates(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame:
     """Drop covariate columns that are constant (no variance)"""
     constant_covariates = []
-    unique_counts = (
-        lf
-        .select(pl.col(config.covariate_columns).n_unique())
-        .collect()
-        .to_dicts()
-    )
+    unique_counts = lf.select(pl.col(config.covariate_columns).n_unique()).collect().to_dicts()
     for col, count in unique_counts[0].items():
         if count <= 1:
             constant_covariates.append(col)
     if constant_covariates:
         logger.warning(f"Dropping constant covariate columns: {', '.join(constant_covariates)}")
         lf = lf.drop(constant_covariates)
-        config.covariate_columns = [col for col in config.covariate_columns if col not in constant_covariates]
+        config.covariate_columns = [
+            col for col in config.covariate_columns if col not in constant_covariates
+        ]
         config.update_row_and_column_counts(lf)
     return lf
 
@@ -87,8 +84,7 @@ def create_dummy_covariates(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame
     if not config.categorical_covariate_columns:
         return lf
     unique_counts = (
-        lf
-        .select(pl.col(config.categorical_covariate_columns).implode().list.unique())
+        lf.select(pl.col(config.categorical_covariate_columns).implode().list.unique())
         .unique()
         .collect()
         .to_dicts()
@@ -98,14 +94,14 @@ def create_dummy_covariates(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame
         if len(values) > 2:
             # Skip the first value to avoid multicollinearity
             new_cols.extend([f"{col}_{value}" for value in values[1:]])
-            lf = (
-                lf
-                .with_columns([
+            lf = lf.with_columns(
+                [
                     pl.when(pl.col(col) == value).then(1).otherwise(0).alias(f"{col}_{value}")
                     for value in values[1:]
-                ])
-                .drop(col)
-            )
-    config.covariate_columns = [col for col in config.covariate_columns if col not in config.categorical_covariate_columns] + new_cols
+                ]
+            ).drop(col)
+    config.covariate_columns = [
+        col for col in config.covariate_columns if col not in config.categorical_covariate_columns
+    ] + new_cols
     config.update_row_and_column_counts(lf)
     return lf

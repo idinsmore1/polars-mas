@@ -5,6 +5,7 @@ import statsmodels.api as sm
 from sklearn.exceptions import ConvergenceWarning
 from firthmodels import FirthLogisticRegression
 
+
 def firth_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
     """Run Firth regression on the given data.
 

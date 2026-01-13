@@ -13,8 +13,6 @@ from functools import partial
 from loguru import logger
 
 
-
-
 @dataclass
 class MASConfig:
     """
@@ -72,20 +70,14 @@ class MASConfig:
         logger.remove()
         if self.quiet:
             logger.add(
-                sys.stdout,
-                level='SUCCESS',
-                filter= lambda record: record["level"].no <= 25,
-                enqueue=True
+                sys.stdout, level="SUCCESS", filter=lambda record: record["level"].no <= 25, enqueue=True
             )
-            logger.add(sys.stderr, level='ERROR', enqueue=True)
+            logger.add(sys.stderr, level="ERROR", enqueue=True)
         elif self.verbose:
             logger.add(
-                sys.stdout,
-                level='DEBUG',
-                filter=lambda record: record["level"].no <= 25,
-                enqueue=True
+                sys.stdout, level="DEBUG", filter=lambda record: record["level"].no <= 25, enqueue=True
             )
-            logger.add(sys.stderr, level='WARNING', enqueue=True)
+            logger.add(sys.stderr, level="WARNING", enqueue=True)
         else:
             # Show everything above INFO
             logger.add(
@@ -226,7 +218,7 @@ class MASConfig:
             female_only=args.female_only,
             verbose=args.verbose,
             quiet=args.quiet,
-            output_type=args.output_type
+            output_type=args.output_type,
         )
 
     def summary(self):

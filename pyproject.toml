@@ -14,7 +14,6 @@ dependencies = [
 
 [project.scripts]
 polars-mas = "polars_mas:main"
-polars-mas-test = "polars_mas.main:main"
 
 [build-system]
 requires = ["hatchling"]

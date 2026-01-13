@@ -9,6 +9,7 @@ def main():
     # Now import the other packages to limit polars threads
     from polars_mas.config import MASConfig
     from polars_mas.pipeline import run_pipeline
+
     config = MASConfig.from_args(args)
     config.summary()
     # If this a dry-run, then stop here
