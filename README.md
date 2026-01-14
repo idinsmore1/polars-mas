@@ -1,65 +1,202 @@
-# Polars-MAS: Multiple Association Studies
+# polars-mas
 
-`polars-mas` is a python library and CLI tool meant to perform large scale multiple association tests, primarily seen in academic research. Currently this tool only supports Firth's logistic regression. Will run as a stand in replacement for PheWAS R package analysis, especially for Phecodes. `polars-mas` is built to leverage the speed and memory efficiency of the `polars` dataframe library and it's interoperability with the `sklearn` and `statsmodels` libraries.  
+A fast Python library for multiple association studies, built on [Polars](https://pola.rs/).
+
+`polars-mas` is designed as a drop-in replacement for the R [PheWAS](https://github.com/PheWAS/PheWAS) package, providing **3-14x speedup** while producing numerically identical results (within 1e-8 tolerance).
+
+## Features
+
+- **Fast**: Leverages Polars for efficient data processing with multi-threaded computation
+- **Accurate**: Produces results identical to the R PheWAS package
+- **Flexible**: Supports multiple regression models and input/output formats
+- **PheCode-aware**: Built-in PheCode definitions and sex-specific code handling
+
+### Supported Models
+
+| Model | Use Case | Flag |
+|-------|----------|------|
+| Firth logistic regression | Binary outcomes (default) | `-m firth` |
+| Standard logistic regression | Binary outcomes | `-m logistic` |
+| Linear regression | Quantitative outcomes | `-m linear` |
+
+### Supported Formats
+
+- **Input**: Parquet, CSV, TSV, TXT (tab-delimited)
+- **Output**: Parquet, CSV, TSV, TXT
 
 ## Installation
-```python
+
+```bash
 pip install polars-mas
 ```
 
-## Running the CLI
-```text
-polars-mas --help
+Or with [uv](https://github.com/astral-sh/uv):
 
-Polars-MAS: A Python package for multiple association analysis.
-
-options:
-  -h, --help            show this help message and exit
-  -i INPUT, --input INPUT
-                        Input file path.
-  -o OUTPUT, --output OUTPUT
-                        Output file prefix. Will be suffixed with '{predictor}.csv'.
-  -p PREDICTORS [PREDICTORS ...], --predictors PREDICTORS [PREDICTORS ...]
-                        Predictor column names. These will be tested independently
-  -s SEPARATOR, --separator SEPARATOR
-                        Column separator. Default is ","
-  -d DEPENDENTS [DEPENDENTS ...], --dependents DEPENDENTS [DEPENDENTS ...]
-                        Dependent variable column names.
-  -di DEPENDENTS_INDICES, --dependents-indices DEPENDENTS_INDICES
-                        Dependent variable column indicies. Ignored if --dependents is used. Accepts comma separated list of
-                        indices/indicies ranges. E.g. 2, 2-5, 2-, 2,3 , 2,5-8, 2,8- are all valid. Range follows python
-                        slicing conventions - includes start, excludes end.
-  -c COVARIATES [COVARIATES ...], --covariates COVARIATES [COVARIATES ...]
-                        Covariate column names.
-  -ci COVARIATES_INDICIES, --covariates-indicies COVARIATES_INDICIES
-                        Covariate column indicies. Ignored if --covariates is used. Accepts comma separated list of
-                        indices/indicies ranges. E.g. 2, 2-5, 2-, 2,3 , 2,5-8, 2,8- are all valid. Range follows python
-                        slicing conventions - includes start, excludes end.
-  -cc CATEGORICAL_COVARIATES [CATEGORICAL_COVARIATES ...], --categorical-covariates CATEGORICAL_COVARIATES [CATEGORICAL_COVARIATES ...]
-                        Categorical covariate column names.
-  -nv NULL_VALUES [NULL_VALUES ...], --null-values NULL_VALUES [NULL_VALUES ...]
-                        List of values to be treated as missing values. Default is None (normal polars option).
-  -qt, --quantitative   Dependent variables are quantitative traits.
-  -mi {drop,forward,backward,min,max,mean,zero,one}, --missing {drop,forward,backward,min,max,mean,zero,one}
-                        Method to handle missing values in covariates and predictor variables. If not specified, rows with
-                        missing values in the predictor and covariate columns will be dropped.
-  -t {standard,min-max}, --transform {standard,min-max}
-                        Transform continuous covariates/predictor variables. Default is no transformation.
-  -mc MIN_CASES, --min-cases MIN_CASES
-                        Minimum number of cases for each dependent variable. Only applied when not --quantitative. Default is
-                        20.
-  -m {firth,linear}, --model {firth,linear}
-                        Type of model to fit. Default is firth logistic regression.
-  --phewas              Input data uses Phecodes for dependent variables.
-  --phewas-sex-col PHEWAS_SEX_COL
-                        Sex covariate column name for PheWAS analysis. Default = 'sex'. Must be coded as male = 0 and female
-                        = 1.
-  -th THREADS, --threads THREADS
-                        Number of threads for numpy and sklearn to use within each worker.
-  -n NUM_WORKERS, --num-workers NUM_WORKERS
-                        Number of workers for parallel processing and threads available to Polars. Default is number of CPUs.
-  -v, --verbose         have more verbose logging
+```bash
+uv add polars-mas
 ```
-If you have an R environment with the `PheWAS` package installed, you can run the `src/tests/example_data/generate_examples.R` script to create dummy data for this repository. 
 
-**NOTE ON THREADS AND WORKERS**: The total number of threads used by `polars-mas` is the number of workers (`-n`) multiplied by the number of threads (`-th`). So if you have 4 workers with 8 threads, `polars-mas` will use 32 threads on your machine. 
+## Quick Start
+
+### Basic Usage
+
+```bash
+polars-mas \
+  -i data.csv \
+  -o results \
+  -p exposure \
+  -d i:10- \
+  -c age,sex,bmi
+```
+
+This runs Firth logistic regression with:
+- `exposure` as the predictor
+- Columns 10 onwards as dependent variables (phecodes)
+- `age`, `sex`, `bmi` as covariates
+
+### PheWAS Analysis
+
+```bash
+polars-mas \
+  -i phewas_data.parquet \
+  -o phewas_results \
+  -p genetic_variant \
+  -d i:20-1850 \
+  -c age,sex,pc1,pc2,pc3 \
+  --phewas \
+  -n 4 \
+  -t 8
+```
+
+The `--phewas` flag enables automatic PheCode annotation in results.
+
+## CLI Reference
+
+```
+polars-mas [OPTIONS]
+
+Input Options:
+  -i, --input PATH              Input file (parquet, csv, tsv, txt)
+  -o, --output PATH             Output file prefix
+  -p, --predictors COLS         Predictor columns (comma-separated)
+  -d, --dependents COLS         Dependent columns (comma-separated)
+  -c, --covariates COLS         Covariate columns (comma-separated)
+  -cc, --categorical-covariates Categorical covariate columns
+  -nv, --null-values VALUES     Values to treat as null (comma-separated)
+  -ot, --output-type TYPE       Output format: parquet, csv, tsv, txt
+
+Association Parameters:
+  -m, --model MODEL             firth (default), logistic, or linear
+  -mc, --min-case-count N       Minimum cases/controls required (default: 20)
+  -mcv, --missing-covariate-values
+                                How to handle missing covariates:
+                                fail, drop, forward, backward, min, max, mean, zero, one
+  -qt, --quantitative           Dependent variables are quantitative
+
+Performance:
+  -n, --num-workers N           Number of worker processes (default: 1)
+  -t, --threads N               Threads per worker (default: 2)
+
+PheCode Options:
+  --phewas                      PheCodes are dependent variables
+  --flipwas                     PheCodes are predictor variables
+  --sex-col COL                 Sex column name (default: sex)
+  --female-code N               Code for female (default: 1)
+  --male-only                   Include only male samples
+  --female-only                 Include only female samples
+
+Other:
+  --dry-run                     Show configuration without running
+  -v, --verbose                 Enable verbose logging
+  -q, --quiet                   Suppress most output
+```
+
+### Column Selection
+
+Columns can be specified by name or index:
+
+```bash
+# By name in comma-separated list
+-p age,sex,bmi
+
+# By index (0-based)
+-d i:10          # Column 10
+-d i:10-20       # Columns 10-19
+-d i:10-         # Column 10 to end
+
+# Can be used in conjuction as well!
+-c age,sex,i:8-12
+```
+
+## Output
+
+Results include:
+
+| Column | Description |
+|--------|-------------|
+| `predictor` | Predictor variable name |
+| `dependent` | Dependent variable name |
+| `pval` | P-value (LRT for Firth) |
+| `beta` | Coefficient estimate |
+| `se` | Standard error |
+| `OR` | Odds ratio (logistic models) |
+| `ci_low`, `ci_high` | 95% confidence interval |
+| `cases`, `controls` | Sample counts (binary outcomes) |
+| `converged` | Model convergence status |
+| `bonferroni_significant` | Bonferroni-corrected significance |
+| `phenotype`, `category` | PheCode annotations (if `--phewas`) |
+
+## Performance
+
+See the [benchmarks](benchmarks/README.md) for detailed comparisons against the R PheWAS package.
+
+**Summary**: `polars-mas` achieves 3-14x speedup depending on the number of covariates, with identical numerical results.
+
+## Current Limitations
+
+The following features from the R PheWAS package are not yet implemented:
+
+- **Multiple testing correction**: Only Bonferroni correction is available (FDR/BH planned)
+- **Variable transformations**: RINT and log transformations are not yet functional
+- **Covariate scaling**: Standard and min-max scaling not yet implemented
+- **Parallel workers**: Currently works best with one polars worker; `-n` flag reserved for future use. More threads with the `-t` option is fine.
+- **Python API**: Only CLI interface is currently documented; programmatic API in development
+
+## Roadmap
+
+Planned features for future releases:
+
+- [ ] FDR (Benjamini-Hochberg) multiple testing correction
+- [ ] Rank-based inverse normal transformation (RINT)
+- [ ] Log transformation for dependent variables
+- [ ] Covariate standardization options
+- [ ] True parallel processing with multiple workers
+- [ ] Python API with DataFrame input/output
+- [ ] Manhattan and QQ plot generation
+- [ ] ICD-to-PheCode mapping utilities
+
+## Requirements
+
+- Python >= 3.11
+- polars >= 1.9.0
+- firthmodels >= 0.4.0
+- statsmodels >= 0.14.4
+
+## License
+
+MIT
+
+## Citation
+
+If you use `polars-mas` in your research, please cite:
+
+```
+polars-mas: A fast Python library for multiple association studies
+https://github.com/PheWAS/polars-mas
+```
+
+## Related Projects
+
+- [PheWAS R Package](https://github.com/PheWAS/PheWAS) - The original R implementation
+- [Polars](https://pola.rs/) - The underlying DataFrame library
+- [firthmodels](https://github.com/jzluo/firthmodels) - Firth logistic regression implementation

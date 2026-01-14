@@ -2,7 +2,7 @@
 .venv
 tmp/
 *phewas*
-
+*.ipynb
 __pycache__/
 *.pyc
 

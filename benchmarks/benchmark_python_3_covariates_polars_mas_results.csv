@@ -1,0 +1,5 @@
+file,samples,phecodes,time_seconds
+phewas_example_5000_samples.csv,5000,1823,19.5602
+phewas_example_10000_samples.csv,10000,1827,27.7066
+phewas_example_50000_samples.csv,50000,1829,111.3769
+phewas_example_1e+05_samples.csv,100000,1830,222.0836

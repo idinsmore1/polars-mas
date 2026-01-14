@@ -27,4 +27,5 @@ dev = [
     "ipykernel>=6.29.5",
     "matplotlib>=3.10.8",
     "ruff>=0.11.9",
+    "seaborn>=0.13.2",
 ]

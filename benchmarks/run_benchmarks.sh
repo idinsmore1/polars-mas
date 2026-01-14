@@ -36,8 +36,8 @@ compare_results() {
     echo "========================================"
     echo ""
 
-    R_RESULTS="results/benchmark_r_phewas_results.csv"
-    PY_RESULTS="results/benchmark_python_polars_mas_results.csv"
+    R_RESULTS="results/benchmark_r_10_covariates_phewas_results.csv"
+    PY_RESULTS="results/benchmark_python_10_covariates_polars_mas_results.csv"
 
     if [[ -f "$R_RESULTS" && -f "$PY_RESULTS" ]]; then
         echo "Results comparison (R vs Python):"
