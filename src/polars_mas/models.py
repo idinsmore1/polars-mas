@@ -9,6 +9,13 @@ from firthmodels import FirthLogisticRegression
 def firth_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
     """Run Firth regression on the given data.
 
+    Uses the same default settings as the R logistf package:
+    - max_iter: 25 (maxit)
+    - max_halfstep: 0 (maxhs)
+    - max_step: 5.0 (maxstep)
+    - gtol: 1e-5 (gconv)
+    - xtol: 1e-5 (xconv)
+
     Parameters
     ----------
     X : polars.DataFrame
@@ -23,13 +30,19 @@ def firth_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
     """
     with warnings.catch_warnings(record=True) as w:
         converged = True
-        fl = FirthLogisticRegression(max_iter=1000)
-        fl.fit(X, y)
+        fl = FirthLogisticRegression(
+            max_iter=25,
+            max_halfstep=0,
+            max_step=5.0,
+            gtol=1e-5,
+            xtol=1e-5,
+        )
+        fl.fit(X, y).lrt(0, warm_start=True)
         for warning in w:
             if issubclass(warning.category, ConvergenceWarning):
                 converged = False
         return {
-            "pval": fl.pvalues_[0],
+            "pval": fl.lrt_pvalues_[0],
             "beta": fl.coef_[0],
             "se": fl.bse_[0],
             "OR": np.e ** fl.coef_[0],

@@ -1,11 +1,11 @@
 [project]
 name = "polars-mas"
-version = "1.0.0"
+version = "0.3.0"
 description = "polars-mas - a fast multiple association library for python backed by polars"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "firthmodels>=0.4.0",
+    "firthmodels[numba]>=0.4.0",
     "loguru>=0.7.2",
     "polars>=1.9.0",
     "pyarrow>=22.0.0",
@@ -25,5 +25,6 @@ line-length = 105
 [dependency-groups]
 dev = [
     "ipykernel>=6.29.5",
+    "matplotlib>=3.10.8",
     "ruff>=0.11.9",
 ]

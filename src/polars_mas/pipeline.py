@@ -16,7 +16,6 @@ def run_pipeline(config: MASConfig):
     config.setup_logger()
     data = config.read_data()
     # Preprocessing steps
-    # TODO add categorical covariate handling
     logger.info("Starting preprocessing...")
     data = limit_sex_specific(data, config)
     data = handle_missing_covariates(data, config)
@@ -26,5 +25,4 @@ def run_pipeline(config: MASConfig):
     # Analysis steps
     results = run_associations(data, config)
     results = postprocess(results, config)
-    # TODO add post-processing of results with multiple testing p-value threshold, annotations, and file saving
     print(results)

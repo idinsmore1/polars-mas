@@ -142,6 +142,7 @@ def _run_association(
     # Prepare the data for regression
     data = _drop_constant_covariates(data, config)
     col_names = data.collect_schema().names()
+    # TODO Add transformations to variables
     predictor = col_names[0]
     dependent = col_names[1]
     covariates = [col for col in col_names if col not in [predictor, dependent]]
@@ -260,7 +261,7 @@ def _get_schema(config: MASConfig, for_polars=True) -> pl.Struct | dict:
                     "ci_low": pl.Float64,
                     "ci_high": pl.Float64,
                     "n_observations": pl.Int64,
-                    "converged": False,
+                    "converged": pl.Boolean,
                     "failed_reason": pl.Utf8,
                     "equation": pl.Utf8,
                 }
