@@ -3,6 +3,7 @@
 tmp/
 *phewas*
 *.ipynb
+*.ipynb_checkpoints/
 __pycache__/
 *.pyc
 

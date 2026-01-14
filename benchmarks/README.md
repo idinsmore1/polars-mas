@@ -48,6 +48,17 @@ To validate that `polars-mas` produces identical results to the original PheWAS 
 
 Both plots show all 1,801 phenotype comparisons lying exactly on the zero line, demonstrating that `polars-mas` and PheWAS produce results that agree within a tolerance of **1e-8**.
 
+## Test Environment
+
+All benchmarks were run on the following system:
+
+| Component | Specification |
+|-----------|---------------|
+| CPU       | Intel Xeon Gold 6132 @ 2.60GHz (14 cores, 28 threads) |
+| Memory    | 64 GB |
+| OS        | Ubuntu 22.04.5 LTS |
+| Kernel    | 6.8.0-90-generic |
+
 ## Reproducing Benchmarks
 
 To reproduce these benchmarks:
