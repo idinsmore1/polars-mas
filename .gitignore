@@ -16,3 +16,4 @@ src/tests/debug_results.csv
 .ruff_cache/
 dist/
 CLAUDE.md
+benchmarks/*.csv
