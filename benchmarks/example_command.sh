@@ -1,10 +1,10 @@
 uv run polars-mas \
--i phewas_example_1e+05_samples_20_covariates.csv \
+-i phewas_example_10000_samples_20_covariates.csv \
 -o example_result_log_fast \
 -c i:1-11 \
 -p rsEXAMPLE \
--d i:22-222 \
+-d i:22- \
 -m firth \
--t 1 \
--n 27 \
+-t 2 \
+-n 8 \
 --phewas

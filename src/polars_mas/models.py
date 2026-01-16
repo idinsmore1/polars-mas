@@ -36,6 +36,7 @@ def firth_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
             max_step=5.0,
             gtol=1e-5,
             xtol=1e-5,
+            backend='numba'
         )
         fl.fit(X, y).lrt(0, warm_start=True)
         for warning in w:
