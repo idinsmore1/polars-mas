@@ -27,10 +27,8 @@ def run_associations(lf: pl.LazyFrame, config: MASConfig) -> pl.DataFrame:
     for predictor in config.predictor_columns:
         for dependent in config.dependent_columns:
             logger.trace(f"Analyzing predictor '{predictor}' with dependent '{dependent}'.")
-            # Placeholder for actual analysis logic
-            result_lazyframe = perform_analysis_optimized(lf, predictor, dependent, config)
+            result_lazyframe = _perform_analysis(lf, predictor, dependent, config)
             result_lazyframes.append(result_lazyframe)
-            # Store or log results as needed
     if not result_lazyframes:
         logger.error("No valid analyses were performed. Please check your configuration and data.")
         return pl.DataFrame()
@@ -51,41 +49,20 @@ def run_associations(lf: pl.LazyFrame, config: MASConfig) -> pl.DataFrame:
     return result_combined
 
 
-def perform_analysis(
-    lf: pl.LazyFrame, predictor: str, dependent: str, config: MASConfig
-) -> pl.LazyFrame:
-    """Perform the actual analysis for a given predictor and dependent variable"""
-    # Select only the relevant columns and drop missing values in the predictor and dependent
-    columns = [predictor, dependent, *config.covariate_columns]
-    analysis_lf = lf.select(columns)
-    model_func = partial(_run_association, predictor=predictor, dependent=dependent, config=config)
-    expected_schema = _get_schema(config)
-    result_lf = (
-        analysis_lf
-        .select(pl.struct(columns).alias("association_struct"))
-        .select(
-            pl.col("association_struct")
-            .map_batches(model_func, returns_scalar=True, return_dtype=expected_schema)
-            .alias("result")
-        )
-    )
-    return result_lf
-
-
-def perform_analysis_optimized(
+def _perform_analysis(
     lf: pl.LazyFrame, predictor: str, dependent: str, config: MASConfig
 ) -> pl.LazyFrame:
     """Perform the actual analysis for a given predictor and dependent variable using optimized function"""
     # Select only the relevant columns and drop missing values in the predictor and dependent
     columns = [predictor, dependent, *config.covariate_columns]
     analysis_lf = lf.select(columns).drop_nulls([predictor, dependent])
-    analysis_lf = _drop_constant_covariates(analysis_lf, config)
-    polars_output_schema = _get_schema(config)
-    association_schema = _get_schema(config, for_polars=False)
+    # analysis_lf = _drop_constant_covariates(analysis_lf, config)
+    polars_output_schema: pl.Struct = _get_schema(config)
+    association_schema: dict = _get_schema(config, for_polars=False)
     result_lf = (
         analysis_lf
         .map_batches(
-            lambda df: _run_association_optimized(df, predictor, dependent, config, association_schema),
+            lambda df: _run_single_association(df, predictor, dependent, config, association_schema),
             schema=pl.Schema(polars_output_schema)
             # returns_scalar=True,
             # return_dtype=polars_output_schema,
@@ -94,7 +71,7 @@ def perform_analysis_optimized(
     return result_lf
     
 
-def _run_association_optimized(df: pl.DataFrame, predictor: str, dependent: str, config: MASConfig, output_schema: dict) -> pl.DataFrame:
+def _run_single_association(df: pl.DataFrame, predictor: str, dependent: str, config: MASConfig, output_schema: dict) -> pl.DataFrame:
     """Run the specified association model on the given data structure"""
     model_funcs = {
         "firth": firth_regression,
@@ -107,7 +84,8 @@ def _run_association_optimized(df: pl.DataFrame, predictor: str, dependent: str,
     output_schema: dict = _validate_data_structure(df, predictor, dependent, config, output_schema)
     if output_schema.get("failed_reason", "nan") != "nan":
         return pl.DataFrame([output_schema], schema=list(output_schema.keys()), orient='row')
-    col_names = df.collect_schema().names()
+    df = _drop_constant_covariates(df, config)
+    col_names = df.schema.names()
     predictor = col_names[0]
     dependent = col_names[1]
     covariates = [col for col in col_names if col not in [predictor, dependent]]
@@ -136,59 +114,6 @@ def _run_association_optimized(df: pl.DataFrame, predictor: str, dependent: str,
             # return output_schema
     # logger.info()
     return pl.DataFrame([output_schema], schema=list(output_schema.keys()), orient='row')
-
-
-def _run_association(
-    association_struct: pl.Struct, predictor: str, dependent: str, config: MASConfig
-) -> dict:
-    """Run the specified association model on the given data structure"""
-    model_funcs = {
-        "firth": firth_regression,
-        "logistic": logistic_regression,
-        "linear": linear_regression,
-    }
-    reg_func = model_funcs.get(config.model, None)
-    if reg_func is None:
-        raise ValueError(f"Model '{config.model}' is not supported.")
-
-    output_schema = _get_schema(config, for_polars=False)
-    # create a dataframe from the struct
-    data = association_struct.struct.unnest()
-    # drop null values in the predictor and dependent
-    data = data.drop_nulls([predictor, dependent])
-    # Check that there is enough data to run the model
-    output_schema = _validate_data_structure(data, predictor, dependent, config, output_schema)
-    if output_schema.get("failed_reason", "nan") != "nan":
-        return output_schema
-    # Prepare the data for regression
-    data = _drop_constant_covariates(data, config)
-    col_names = data.collect_schema().names()
-    # TODO Add transformations to variables
-    predictor = col_names[0]
-    dependent = col_names[1]
-    covariates = [col for col in col_names if col not in [predictor, dependent]]
-    equation = f"{dependent} ~ {predictor} + {' + '.join(covariates)}"
-    X = data.select([predictor, *covariates])
-    y = data.get_column(dependent).to_numpy()
-    with threadpool_limits(config.num_threads):
-        try:
-            results = reg_func(X, y)
-            output_schema.update(
-                {"predictor": predictor, "dependent": dependent, "equation": equation, **results}
-            )
-            return output_schema
-        except Exception as e:
-            logger.error(
-                f"Error in {config.model} regression for predictor '{predictor}' and dependent '{dependent}': {e}"
-            )
-            return output_schema.update(
-                {
-                    "predictor": predictor,
-                    "dependent": dependent,
-                    "equation": equation,
-                    "failed_reason": str(e),
-                }
-            )
 
 
 def _validate_data_structure(data: pl.DataFrame, predictor: str, dependent: str, config: MASConfig, output_schema: dict) -> dict:
@@ -275,22 +200,22 @@ def _check_case_counts(
     return True, "", case_count, controls_count, n_rows
 
 
-def _drop_constant_covariates(analysis_lazyframe: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame:
+def _drop_constant_covariates(df: pl.DataFrame, config: MASConfig) -> pl.DataFrame:
     """Drop covariate columns that are constant (no variance)"""
-    unique_counts = analysis_lazyframe.select(pl.col(config.covariate_columns).n_unique()).collect().to_dicts()
+    unique_counts = df.select(pl.col(config.covariate_columns).n_unique()).to_dicts()
     constant_covariates = []
     for col, count in unique_counts[0].items():
         if count <= 1:
             constant_covariates.append(col)
     if constant_covariates:
         logger.debug(f"Dropping constant covariate columns: {', '.join(constant_covariates)}")
-        cleaned_lazyframe = analysis_lazyframe.drop(constant_covariates)
-        return cleaned_lazyframe
+        cleaned_df = df.drop(constant_covariates)
+        return cleaned_df
     else:
-        return analysis_lazyframe
+        return df
 
 
-def _get_schema(config: MASConfig, for_polars=True) -> pl.Struct | dict:
+def _get_schema(config: MASConfig, for_polars=True):
     if config.model == "firth" or config.model == "logistic":
         if for_polars:
             return pl.Struct(

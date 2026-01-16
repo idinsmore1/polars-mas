@@ -5,6 +5,6 @@ uv run polars-mas \
 -p rsEXAMPLE \
 -d i:22- \
 -m firth \
--t 2 \
--n 8 \
+-t 1 \
+-n 24 \
 --phewas
