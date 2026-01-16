@@ -22,14 +22,14 @@ def run_associations(lf: pl.LazyFrame, config: MASConfig) -> pl.DataFrame:
         logger.info("Using standard logistic regression model for analysis.")
     elif config.model == "linear":
         logger.info("Using linear regression model for analysis.")
+    lf = lf.collect().lazy()
     result_lazyframes = []
     for predictor in config.predictor_columns:
         for dependent in config.dependent_columns:
             logger.trace(f"Analyzing predictor '{predictor}' with dependent '{dependent}'.")
             # Placeholder for actual analysis logic
             result_lazyframe = perform_analysis(lf, predictor, dependent, config)
-            if result_lazyframe is not None:
-                result_lazyframes.append(result_lazyframe)
+            result_lazyframes.append(result_lazyframe)
             # Store or log results as needed
     if not result_lazyframes:
         logger.error("No valid analyses were performed. Please check your configuration and data.")
@@ -60,10 +60,14 @@ def perform_analysis(
     analysis_lf = lf.select(columns)
     model_func = partial(_run_association, predictor=predictor, dependent=dependent, config=config)
     expected_schema = _get_schema(config)
-    result_lf = analysis_lf.select(pl.struct(columns).alias("association_struct")).select(
-        pl.col("association_struct")
-        .map_batches(model_func, returns_scalar=True, return_dtype=expected_schema)
-        .alias("result")
+    result_lf = (
+        analysis_lf
+        .select(pl.struct(columns).alias("association_struct"))
+        .select(
+            pl.col("association_struct")
+            .map_batches(model_func, returns_scalar=True, return_dtype=expected_schema)
+            .alias("result")
+        )
     )
     return result_lf
 
