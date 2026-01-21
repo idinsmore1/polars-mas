@@ -34,6 +34,20 @@ Benchmark conditions: 5,000 samples, ~1,800 phecodes, 8 threads
 
 As the number of covariates increases, `polars-mas` shows increasingly better performance relative to PheWAS, achieving up to **13.7x speedup** with 20 covariates.
 
+## Memory Usage
+
+### Memory by Sample Size
+
+Benchmark conditions: 5 covariates, ~1,800 phecodes, 8 threads
+
+![Memory Sample Scaling](memory_sample_scaling.png)
+
+### Memory by Covariate Count
+
+Benchmark conditions: 5,000 samples, ~1,800 phecodes, 8 threads
+
+![Memory Covariate Scaling](memory_covariate_scaling.png)
+
 ## Numerical Agreement
 
 To validate that `polars-mas` produces identical results to the original PheWAS package, we compared output metrics using Bland-Altman plots. All differences were computed and rounded to 8 decimal places.

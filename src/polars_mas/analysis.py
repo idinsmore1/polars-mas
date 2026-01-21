@@ -55,7 +55,7 @@ def _perform_analysis(
     """Perform the actual analysis for a given predictor and dependent variable using optimized function"""
     # Select only the relevant columns and drop missing values in the predictor and dependent
     columns = [predictor, dependent, *config.covariate_columns]
-    analysis_lf = lf.select(columns).drop_nulls([predictor, dependent])
+    analysis_lf = lf.select(columns)
     # analysis_lf = _drop_constant_covariates(analysis_lf, config)
     polars_output_schema: pl.Struct = _get_schema(config)
     association_schema: dict = _get_schema(config, for_polars=False)
@@ -84,6 +84,7 @@ def _run_single_association(df: pl.DataFrame, predictor: str, dependent: str, co
     output_schema: dict = _validate_data_structure(df, predictor, dependent, config, output_schema)
     if output_schema.get("failed_reason", "nan") != "nan":
         return pl.DataFrame([output_schema], schema=list(output_schema.keys()), orient='row')
+    df = df.drop_nulls([predictor, dependent])
     df = _drop_constant_covariates(df, config)
     col_names = df.schema.names()
     predictor = col_names[0]

@@ -17,3 +17,5 @@ src/tests/debug_results.csv
 dist/
 CLAUDE.md
 benchmarks/*.csv
+benchmarks/long_format_example.parquet
+.gitignore
