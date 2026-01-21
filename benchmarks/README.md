@@ -6,16 +6,17 @@ This directory contains benchmarks comparing `polars-mas` against the original R
 
 ### Sample Size Scaling
 
-Benchmark conditions: 3 covariates, ~1,800 phecodes, 8 threads
+Benchmark conditions: 5 covariates, ~1,800 phecodes, 8 threads
 
 ![Sample Size Scaling](sample_size_scaling.png)
 
 | Sample Size | polars-mas (s) | PheWAS (s) | Speedup |
 |-------------|----------------|------------|---------|
-| 5,000       | 19.6           | 85.4       | 4.4x    |
-| 10,000      | 27.7           | 115.6      | 4.2x    |
-| 50,000      | 111.4          | 347.7      | 3.1x    |
-| 100,000     | 222.1          | 681.7      | 3.1x    |
+| 1,000       | 7.3            | 7.1        | 1.0x    |
+| 5,000       | 22.2           | 112.6      | 5.1x    |
+| 10,000      | 33.2           | 160.0      | 4.8x    |
+| 15,000      | 42.5           | 210.8      | 5.0x    |
+| 20,000      | 56.5           | 266.7      | 4.7x    |
 
 ### Covariate Scaling
 
@@ -25,14 +26,14 @@ Benchmark conditions: 5,000 samples, ~1,800 phecodes, 8 threads
 
 | Covariates | polars-mas (s) | PheWAS (s) | Speedup |
 |------------|----------------|------------|---------|
-| 1          | 23.9           | 59.2       | 2.5x    |
-| 3          | 25.9           | 83.7       | 3.2x    |
-| 5          | 30.1           | 116.4      | 3.9x    |
-| 10         | 35.6           | 244.6      | 6.9x    |
-| 15         | 49.7           | 479.9      | 9.7x    |
-| 20         | 64.7           | 888.9      | 13.7x   |
+| 1          | 17.2           | 90.2       | 5.2x    |
+| 3          | 19.9           | 86.3       | 4.3x    |
+| 5          | 22.5           | 116.1      | 5.2x    |
+| 10         | 26.8           | 247.7      | 9.3x    |
+| 15         | 41.1           | 487.4      | 11.9x   |
+| 20         | 55.7           | 901.6      | 16.2x   |
 
-As the number of covariates increases, `polars-mas` shows increasingly better performance relative to PheWAS, achieving up to **13.7x speedup** with 20 covariates.
+As the number of covariates increases, `polars-mas` shows increasingly better performance relative to PheWAS, achieving up to **16.2x speedup** with 20 covariates.
 
 ## Memory Usage
 
@@ -40,13 +41,30 @@ As the number of covariates increases, `polars-mas` shows increasingly better pe
 
 Benchmark conditions: 5 covariates, ~1,800 phecodes, 8 threads
 
-![Memory Sample Scaling](memory_sample_scaling.png)
+![Memory Sample Scaling](sample_size_scaling_memory.png)
+
+| Sample Size | polars-mas (MB) | PheWAS (MB) | Reduction |
+|-------------|-----------------|-------------|-----------|
+| 1,000       | 579.7           | 981.6       | 41%       |
+| 5,000       | 601.4           | 1009.6      | 40%       |
+| 10,000      | 631.2           | 1045.4      | 40%       |
+| 15,000      | 656.9           | 1082.0      | 39%       |
+| 20,000      | 686.1           | 1118.5      | 39%       |
 
 ### Memory by Covariate Count
 
 Benchmark conditions: 5,000 samples, ~1,800 phecodes, 8 threads
 
-![Memory Covariate Scaling](memory_covariate_scaling.png)
+![Memory Covariate Scaling](covariate_scaling_memory.png)
+
+| Covariates | polars-mas (MB) | PheWAS (MB) | Reduction |
+|------------|-----------------|-------------|-----------|
+| 1          | 590.0           | 1009.0      | 42%       |
+| 3          | 601.0           | 1009.4      | 40%       |
+| 5          | 598.6           | 1009.4      | 41%       |
+| 10         | 608.0           | 1009.4      | 40%       |
+| 15         | 616.2           | 1009.4      | 39%       |
+| 20         | 620.6           | 1009.4      | 39%       |
 
 ## Numerical Agreement
 
