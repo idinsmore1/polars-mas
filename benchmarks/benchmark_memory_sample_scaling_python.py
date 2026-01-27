@@ -19,7 +19,7 @@ DATA_FILE = Path(__file__).parent / "phewas_example_1e+05_samples_50_covariates.
 
 # Common parameters
 PREDICTOR = "rsEXAMPLE"
-NUM_WORKERS = 8
+NUM_WORKERS = 1
 MODEL = "firth"
 
 # Standard covariates for sample scaling test
@@ -51,7 +51,7 @@ def ensure_sample_indices(n_total: int, max_samples: int, output_dir: Path) -> l
 def run_benchmark(subset_file: Path, n_samples: int, output_dir: Path) -> dict:
     """Run polars-mas with /usr/bin/time to measure memory usage."""
     covariates_str = ",".join(COVARIATES)
-    output_file = output_dir / f"benchmark_memory_sample_scaling_{n_samples}_samples_results"
+    output_file = output_dir / f"IPC_benchmark_memory_sample_scaling_{n_samples}_samples_results"
 
     cmd = [
         "/usr/bin/time", "-v",
@@ -62,7 +62,7 @@ def run_benchmark(subset_file: Path, n_samples: int, output_dir: Path) -> dict:
         "-d", "i:52-",  # All columns from index 52 onwards are phecodes (0-indexed)
         "-c", covariates_str,
         "-m", MODEL,
-        "-n", "1",  # Index of first outcome column (1-indexed for display)
+        "-n", "8",  # Index of first outcome column (1-indexed for display)
         "-t", str(NUM_WORKERS),
         "--phewas",
         "-q",  # Quiet mode
@@ -159,7 +159,7 @@ def main():
         print(f"{r['n_samples']:>12} {r['time_seconds']:>12.2f} {r['max_rss_mb']:>14.1f}")
 
     # Save results to CSV
-    output_file = output_dir / "benchmark_memory_sample_scaling_python_results.csv"
+    output_file = output_dir / "IPC_benchmark_memory_sample_scaling_python_results.csv"
     with open(output_file, "w") as f:
         f.write("n_samples,time_seconds,max_rss_kb,max_rss_mb\n")
         for r in results:

@@ -5,6 +5,6 @@ uv run polars-mas \
 -p rsEXAMPLE \
 -d i:58- \
 -m logistic \
--t 3 \
--n 8 \
+-t 2 \
+-n 12 \
 --phewas
