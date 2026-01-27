@@ -963,7 +963,6 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "ipykernel" },
-    { name = "joblib" },
     { name = "matplotlib" },
     { name = "ruff" },
     { name = "seaborn" },
@@ -982,7 +981,6 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "ipykernel", specifier = ">=6.29.5" },
-    { name = "joblib", specifier = ">=1.5.3" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "ruff", specifier = ">=0.11.9" },
     { name = "seaborn", specifier = ">=0.13.2" },

@@ -68,30 +68,36 @@ class MASConfig:
         self._parse_column_lists()
         self._assert_unique_column_sets()
 
+    @staticmethod
+    def _log_format(record):
+        """Use a compact format for INFO/SUCCESS, detailed format for everything else."""
+        if record["level"].no == 20:  # INFO
+            return "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | {message}\n"
+        if record["level"].no == 25:  # SUCCESS
+            return "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <green>{message}</green>\n"
+        return "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{module}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - {message}\n"
+
     def setup_logger(self):
         logger.remove()
         if self.quiet:
             logger.add(
-                sys.stdout, level="SUCCESS", filter=lambda record: record["level"].no <= 25, enqueue=True
+                sys.stdout, level="SUCCESS", format=self._log_format,
+                filter=lambda record: record["level"].no <= 25, enqueue=True,
             )
-            logger.add(sys.stderr, level="ERROR", enqueue=True)
+            logger.add(sys.stderr, level="ERROR", format=self._log_format, enqueue=True)
         elif self.verbose:
             logger.add(
-                sys.stdout, level="DEBUG", filter=lambda record: record["level"].no <= 25, enqueue=True
+                sys.stdout, level="DEBUG", format=self._log_format,
+                filter=lambda record: record["level"].no <= 25, enqueue=True,
             )
-            logger.add(sys.stderr, level="WARNING", enqueue=True)
+            logger.add(sys.stderr, level="WARNING", format=self._log_format, enqueue=True)
         else:
-            # Show everything above INFO
             logger.add(
-                sys.stdout,
-                level="INFO",
-                filter=lambda record: record["level"].no <= 25,
-                enqueue=True,
+                sys.stdout, level="INFO", format=self._log_format,
+                filter=lambda record: record["level"].no <= 25, enqueue=True,
             )
             logger.add(
-                sys.stderr,
-                level="WARNING",
-                enqueue=True,
+                sys.stderr, level="WARNING", format=self._log_format, enqueue=True,
             )
 
     def _validate_io(self):

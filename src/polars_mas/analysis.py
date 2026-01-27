@@ -19,20 +19,14 @@ def run_associations_ipc(config: MASConfig) -> pl.DataFrame:
         f"Starting association analyses for {num_groups} groups "
         f"({len(config.predictor_columns)} predictor(s) x {len(config.dependent_columns)} dependent(s))."
     )
-    if config.model == "firth":
-        logger.info("Using Firth logistic regression model for analysis.")
-    elif config.model == "logistic":
-        logger.info("Using standard logistic regression model for analysis.")
-    elif config.model == "linear":
-        logger.info("Using linear regression model for analysis.")
 
     # Set POLARS_MAX_THREADS for child processes (loky uses spawn)
     original_env = os.environ.get("POLARS_MAX_THREADS")
     os.environ["POLARS_MAX_THREADS"] = str(config.num_threads)
     try:
-        results = Parallel(n_jobs=config.num_workers, verbose=10, backend="loky")(
-            delayed(_perform_analysis_ipc)(predictor, dependent, config)
-            for predictor, dependent in targets
+        results = Parallel(n_jobs=config.num_workers, verbose=0, backend="loky")(
+            delayed(_perform_analysis_ipc)(predictor, dependent, config, i, num_groups)
+            for i, (predictor, dependent) in enumerate(targets, 1)
         )
     finally:
         if original_env is None:
@@ -41,15 +35,18 @@ def run_associations_ipc(config: MASConfig) -> pl.DataFrame:
             os.environ["POLARS_MAX_THREADS"] = original_env
 
     result_combined = pl.concat(results, how="diagonal_relaxed").sort("pval")
-    logger.success("Association analyses completed successfully!")
+    logger.success("All analyses complete!")
     return result_combined
 
 
-def _perform_analysis_ipc(predictor: str, dependent: str, config: MASConfig) -> pl.DataFrame:
+def _perform_analysis_ipc(
+    predictor: str, dependent: str, config: MASConfig, task_num: int, total_tasks: int
+) -> pl.DataFrame:
     """
     Run analysis for a single predictor-dependent pair on the IPC file.
     All data operations happen inside this job.
     """
+    config.setup_logger()
     with threadpool_limits(config.num_threads):
         schema = _get_schema(config)
 
@@ -103,7 +100,10 @@ def _perform_analysis_ipc(predictor: str, dependent: str, config: MASConfig) -> 
                     "failed_reason": str(e),
                 }
             )
-
+    
+    log_interval = _get_log_interval(total_tasks)
+    if task_num % log_interval == 0 or task_num == total_tasks:
+        logger.info(f"Progress: {task_num}/{total_tasks} ({100 * task_num // total_tasks}%)")
     return pl.DataFrame([schema], schema=list(schema.keys()), orient="row")
 
 
@@ -204,6 +204,25 @@ def _drop_constant_covariates(df: pl.DataFrame, config: MASConfig) -> pl.DataFra
         logger.debug(f"Dropping constant covariate columns: {', '.join(constant_covariates)}")
         return df.drop(constant_covariates)
     return df
+
+
+def _get_log_interval(total: int) -> int:
+    """Return how often to log progress based on total task count."""
+    if total <= 10:
+        return 1
+    if total <= 50:
+        return 5
+    if total <= 100:
+        return 10
+    if total <= 200:
+        return 20
+    if total <= 300:
+        return 30
+    if total <= 400:
+        return 40
+    if total <= 500:
+        return 50
+    return 100
 
 
 def _get_schema(config: MASConfig) -> dict:
