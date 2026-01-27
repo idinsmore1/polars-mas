@@ -1,21 +1,23 @@
-import numpy as np
+import os
 import polars as pl
-from functools import partial
+from joblib import Parallel, delayed
 from loguru import logger
 from threadpoolctl import threadpool_limits
 from polars_mas.config import MASConfig
-from polars_mas.preprocessing import drop_constant_covariates
 from polars_mas.models import firth_regression, logistic_regression, linear_regression
-import time
 
 
-def run_associations(lf: pl.LazyFrame, config: MASConfig) -> pl.DataFrame:
-    """Run association analyses based on the configuration"""
-    num_predictors = len(config.predictor_columns)
-    num_dependents = len(config.dependent_columns)
-    num_groups = num_predictors * num_dependents
+def run_associations_ipc(config: MASConfig) -> pl.DataFrame:
+    """Run all association analyses in parallel using IPC memory-mapped files."""
+    targets = []
+    for predictor in config.predictor_columns:
+        for dependent in config.dependent_columns:
+            targets.append((predictor, dependent))
+
+    num_groups = len(targets)
     logger.info(
-        f"Starting association analyses for {num_groups} groups ({num_predictors} predictor{'s' if num_predictors != 1 else ''} x {num_dependents} dependent{'s' if num_dependents != 1 else ''})."
+        f"Starting association analyses for {num_groups} groups "
+        f"({len(config.predictor_columns)} predictor(s) x {len(config.dependent_columns)} dependent(s))."
     )
     if config.model == "firth":
         logger.info("Using Firth logistic regression model for analysis.")
@@ -23,101 +25,91 @@ def run_associations(lf: pl.LazyFrame, config: MASConfig) -> pl.DataFrame:
         logger.info("Using standard logistic regression model for analysis.")
     elif config.model == "linear":
         logger.info("Using linear regression model for analysis.")
-    result_lazyframes = []
-    for predictor in config.predictor_columns:
-        for dependent in config.dependent_columns:
-            logger.trace(f"Analyzing predictor '{predictor}' with dependent '{dependent}'.")
-            result_lazyframe = _perform_analysis(lf, predictor, dependent, config)
-            result_lazyframes.append(result_lazyframe)
-    if not result_lazyframes:
-        logger.error("No valid analyses were performed. Please check your configuration and data.")
-        return pl.DataFrame()
-    # Collect in batches with progress
-    batch_size = min(100, max(10, num_groups // 10))
-    all_results = []
-    for i in range(0, len(result_lazyframes), batch_size):
-        batch = result_lazyframes[i : i + batch_size]
-        results = pl.collect_all(batch)
-        all_results.extend(results)
-        completed = min(i + batch_size, len(result_lazyframes))
-        logger.success(f"Progress: {completed}/{num_groups} ({100 * completed // num_groups}%)")
 
-    result_combined = pl.concat(
-        [result for result in all_results], how="diagonal_relaxed"
-    ).sort("pval")
+    # Set POLARS_MAX_THREADS for child processes (loky uses spawn)
+    original_env = os.environ.get("POLARS_MAX_THREADS")
+    os.environ["POLARS_MAX_THREADS"] = str(config.num_threads)
+    try:
+        results = Parallel(n_jobs=config.num_workers, verbose=10, backend="loky")(
+            delayed(_perform_analysis_ipc)(predictor, dependent, config)
+            for predictor, dependent in targets
+        )
+    finally:
+        if original_env is None:
+            os.environ.pop("POLARS_MAX_THREADS", None)
+        else:
+            os.environ["POLARS_MAX_THREADS"] = original_env
+
+    result_combined = pl.concat(results, how="diagonal_relaxed").sort("pval")
     logger.success("Association analyses completed successfully!")
     return result_combined
 
 
-def _perform_analysis(
-    lf: pl.LazyFrame, predictor: str, dependent: str, config: MASConfig
-) -> pl.LazyFrame:
-    """Perform the actual analysis for a given predictor and dependent variable using optimized function"""
-    # Select only the relevant columns and drop missing values in the predictor and dependent
-    columns = [predictor, dependent, *config.covariate_columns]
-    analysis_lf = lf.select(columns)
-    # analysis_lf = _drop_constant_covariates(analysis_lf, config)
-    polars_output_schema: pl.Struct = _get_schema(config)
-    association_schema: dict = _get_schema(config, for_polars=False)
-    result_lf = (
-        analysis_lf
-        .map_batches(
-            lambda df: _run_single_association(df, predictor, dependent, config, association_schema),
-            schema=pl.Schema(polars_output_schema)
-            # returns_scalar=True,
-            # return_dtype=polars_output_schema,
-        )
-    )
-    return result_lf
-    
-
-def _run_single_association(df: pl.DataFrame, predictor: str, dependent: str, config: MASConfig, output_schema: dict) -> pl.DataFrame:
-    """Run the specified association model on the given data structure"""
-    model_funcs = {
-        "firth": firth_regression,
-        "logistic": logistic_regression,
-        "linear": linear_regression,
-    }
-    reg_func = model_funcs.get(config.model, None)
-    if reg_func is None:
-        raise ValueError(f"Model '{config.model}' is not supported.")
-    output_schema: dict = _validate_data_structure(df, predictor, dependent, config, output_schema)
-    if output_schema.get("failed_reason", "nan") != "nan":
-        return pl.DataFrame([output_schema], schema=list(output_schema.keys()), orient='row')
-    df = df.drop_nulls([predictor, dependent])
-    df = _drop_constant_covariates(df, config)
-    col_names = df.schema.names()
-    predictor = col_names[0]
-    dependent = col_names[1]
-    covariates = [col for col in col_names if col not in [predictor, dependent]]
-    equation = f"{dependent} ~ {predictor} + {' + '.join(covariates)}"
-    X = df.select([predictor, *covariates])
-    y = df.get_column(dependent).to_numpy()
+def _perform_analysis_ipc(predictor: str, dependent: str, config: MASConfig) -> pl.DataFrame:
+    """
+    Run analysis for a single predictor-dependent pair on the IPC file.
+    All data operations happen inside this job.
+    """
     with threadpool_limits(config.num_threads):
+        schema = _get_schema(config)
+
+        # Load only needed columns via memory-mapped IPC
+        df = (
+            pl.scan_ipc(config.ipc_file, memory_map=True)
+            .select([predictor, dependent, *config.covariate_columns])
+            .drop_nulls([predictor, dependent])
+            .collect()
+        )
+
+        # Validate data structure
+        schema = _validate_data_structure(df, predictor, dependent, config, schema)
+        if schema.get("failed_reason", "nan") != "nan":
+            return pl.DataFrame([schema], schema=list(schema.keys()), orient="row")
+
+        # Drop constant covariates on this subset
+        df = _drop_constant_covariates(df, config)
+
+        # Build regression inputs
+        col_names = df.schema.names()
+        pred_col = col_names[0]
+        dep_col = col_names[1]
+        covariates = [c for c in col_names if c not in [pred_col, dep_col]]
+        equation = f"{dep_col} ~ {pred_col} + {' + '.join(covariates)}"
+
+        X = df.select([pred_col, *covariates])
+        y = df.get_column(dep_col).to_numpy()
+
+        model_funcs = {
+            "firth": firth_regression,
+            "logistic": logistic_regression,
+            "linear": linear_regression,
+        }
+        reg_func = model_funcs[config.model]
+
         try:
             results = reg_func(X, y)
-            output_schema.update(
-                {"predictor": predictor, "dependent": dependent, "equation": equation, **results}
+            schema.update(
+                {"predictor": pred_col, "dependent": dep_col, "equation": equation, **results}
             )
-            # return output_schema
         except Exception as e:
             logger.error(
-                f"Error in {config.model} regression for predictor '{predictor}' and dependent '{dependent}': {e}"
+                f"Error in {config.model} regression for predictor '{pred_col}' and dependent '{dep_col}': {e}"
             )
-            output_schema.update(
+            schema.update(
                 {
-                    "predictor": predictor,
-                    "dependent": dependent,
+                    "predictor": pred_col,
+                    "dependent": dep_col,
                     "equation": equation,
                     "failed_reason": str(e),
                 }
             )
-            # return output_schema
-    # logger.info()
-    return pl.DataFrame([output_schema], schema=list(output_schema.keys()), orient='row')
+
+    return pl.DataFrame([schema], schema=list(schema.keys()), orient="row")
 
 
-def _validate_data_structure(data: pl.DataFrame, predictor: str, dependent: str, config: MASConfig, output_schema: dict) -> dict:
+def _validate_data_structure(
+    data: pl.DataFrame, predictor: str, dependent: str, config: MASConfig, output_schema: dict
+) -> dict:
     if data.height == 0:
         logger.error(
             f"No data available after dropping nulls for predictor '{predictor}' and dependent '{dependent}'."
@@ -130,7 +122,6 @@ def _validate_data_structure(data: pl.DataFrame, predictor: str, dependent: str,
             }
         )
         return output_schema
-    # Do check on case counts for non-quantitative outcomes
     if not config.quantitative:
         is_viable, message, case_count, controls_count, total_n = _check_case_counts(
             data, dependent, config.min_case_count
@@ -173,6 +164,7 @@ def _validate_data_structure(data: pl.DataFrame, predictor: str, dependent: str,
             output_schema.update({"n_observations": data.height})
             return output_schema
 
+
 def _check_case_counts(
     struct_dataframe: pl.DataFrame, dependent: str, min_case_count: int
 ) -> tuple[bool, str, int, int, int]:
@@ -203,85 +195,47 @@ def _check_case_counts(
 
 def _drop_constant_covariates(df: pl.DataFrame, config: MASConfig) -> pl.DataFrame:
     """Drop covariate columns that are constant (no variance)"""
-    unique_counts = df.select(pl.col(config.covariate_columns).n_unique()).to_dicts()
-    constant_covariates = []
-    for col, count in unique_counts[0].items():
-        if count <= 1:
-            constant_covariates.append(col)
+    covariate_cols = [c for c in config.covariate_columns if c in df.columns]
+    if not covariate_cols:
+        return df
+    unique_counts = df.select(pl.col(covariate_cols).n_unique()).to_dicts()
+    constant_covariates = [col for col, count in unique_counts[0].items() if count <= 1]
     if constant_covariates:
         logger.debug(f"Dropping constant covariate columns: {', '.join(constant_covariates)}")
-        cleaned_df = df.drop(constant_covariates)
-        return cleaned_df
-    else:
-        return df
+        return df.drop(constant_covariates)
+    return df
 
 
-def _get_schema(config: MASConfig, for_polars=True):
-    if config.model == "firth" or config.model == "logistic":
-        if for_polars:
-            return pl.Struct(
-                {
-                    "predictor": pl.Utf8,
-                    "dependent": pl.Utf8,
-                    "pval": pl.Float64,
-                    "beta": pl.Float64,
-                    "se": pl.Float64,
-                    "OR": pl.Float64,
-                    "ci_low": pl.Float64,
-                    "ci_high": pl.Float64,
-                    "cases": pl.Int64,
-                    "controls": pl.Int64,
-                    "total_n": pl.Int64,
-                    "converged": pl.Boolean,
-                    "failed_reason": pl.Utf8,
-                    "equation": pl.Utf8,
-                }
-            )
-        else:
-            return {
-                "predictor": "nan",
-                "dependent": "nan",
-                "pval": float("nan"),
-                "beta": float("nan"),
-                "se": float("nan"),
-                "OR": float("nan"),
-                "ci_low": float("nan"),
-                "ci_high": float("nan"),
-                "cases": -9,
-                "controls": -9,
-                "total_n": -9,
-                "converged": False,
-                "failed_reason": "nan",
-                "equation": "nan",
-            }
+def _get_schema(config: MASConfig) -> dict:
+    """Get the default output schema dict for the given model type."""
+    if config.model in ("firth", "logistic"):
+        return {
+            "predictor": "nan",
+            "dependent": "nan",
+            "pval": float("nan"),
+            "beta": float("nan"),
+            "se": float("nan"),
+            "OR": float("nan"),
+            "ci_low": float("nan"),
+            "ci_high": float("nan"),
+            "cases": -9,
+            "controls": -9,
+            "total_n": -9,
+            "converged": False,
+            "failed_reason": "nan",
+            "equation": "nan",
+        }
     if config.model == "linear":
-        if for_polars:
-            return pl.Struct(
-                {
-                    "predictor": pl.Utf8,
-                    "dependent": pl.Utf8,
-                    "pval": pl.Float64,
-                    "beta": pl.Float64,
-                    "se": pl.Float64,
-                    "ci_low": pl.Float64,
-                    "ci_high": pl.Float64,
-                    "n_observations": pl.Int64,
-                    "converged": pl.Boolean,
-                    "failed_reason": pl.Utf8,
-                    "equation": pl.Utf8,
-                }
-            )
-        else:
-            return {
-                "predictor": "nan",
-                "dependent": "nan",
-                "pval": float("nan"),
-                "beta": float("nan"),
-                "se": float("nan"),
-                "ci_low": float("nan"),
-                "ci_high": float("nan"),
-                "cases": -9,
-                "converged": False,
-                "failed_reason": "nan",
-                "equation": "nan",
-            }
+        return {
+            "predictor": "nan",
+            "dependent": "nan",
+            "pval": float("nan"),
+            "beta": float("nan"),
+            "se": float("nan"),
+            "ci_low": float("nan"),
+            "ci_high": float("nan"),
+            "n_observations": -9,
+            "converged": False,
+            "failed_reason": "nan",
+            "equation": "nan",
+        }

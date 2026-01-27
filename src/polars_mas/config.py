@@ -47,12 +47,14 @@ class MASConfig:
     quiet: bool
     output_type: Literal["parquet", "csv", "tsv", "txt"]
 
+
     # Derived attributes post-init
     reader: FunctionType | partial[pl.LazyFrame] | None = field(default=None, init=False)
     column_names: list[str] = field(default_factory=list, init=False)
     total_column_count: int = field(default_factory=int, init=False)
     included_column_count: int = field(default_factory=int, init=False)
     included_row_count: int = field(default_factory=int, init=False)
+    ipc_file: str | None = field(default=None, init=False)
     # Column lists
     predictor_columns: list[str] = field(default_factory=list, init=False)
     dependent_columns: list[str] = field(default_factory=list, init=False)

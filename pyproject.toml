@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "firthmodels[numba]>=0.4.0",
+    "joblib>=1.5.3",
     "loguru>=0.7.2",
     "polars>=1.9.0",
     "pyarrow>=22.0.0",

@@ -1,3 +1,4 @@
+import tempfile
 import polars as pl
 from loguru import logger
 from polars_mas.config import MASConfig
@@ -105,3 +106,27 @@ def create_dummy_covariates(lf: pl.LazyFrame, config: MASConfig) -> pl.LazyFrame
     ] + new_cols
     config.update_row_and_column_counts(lf)
     return lf
+
+
+def write_temp_ipc(lf: pl.LazyFrame, config: MASConfig) -> None:
+    """Write preprocessed data to a temporary IPC file, preferring /dev/shm on Linux."""
+    import sys
+    import shutil
+    import os
+
+    ipc_dir = None
+    if sys.platform == "linux" and os.path.exists("/dev/shm"):
+        shm_usage = shutil.disk_usage("/dev/shm")
+        # Use /dev/shm if at least 2GB free
+        if shm_usage.free > 2 * 1024**3:
+            ipc_dir = "/dev/shm"
+            logger.info("Using /dev/shm for IPC file (shared memory).")
+        else:
+            logger.info("/dev/shm has insufficient space, falling back to temp directory.")
+
+    tf = tempfile.NamedTemporaryFile(delete=False, suffix=".ipc", dir=ipc_dir)
+    tf_name = tf.name
+    tf.close()
+    lf.sink_ipc(tf_name)
+    config.ipc_file = tf_name
+    logger.info(f"Temporary IPC file written to {config.ipc_file}")
