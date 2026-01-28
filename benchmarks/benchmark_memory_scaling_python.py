@@ -19,7 +19,7 @@ DATA_FILE = Path(__file__).parent / "phewas_example_1e+05_samples_50_covariates.
 
 # Common parameters
 PREDICTOR = "rsEXAMPLE"
-NUM_WORKERS = 8
+NUM_WORKERS = 1
 MODEL = "firth"
 N_SAMPLES = 5000
 
@@ -74,7 +74,7 @@ def run_benchmark(subset_file: Path, covariates: list[str], n_covariates: int, o
         "-d", "i:52-",  # All columns from index 52 onwards are phecodes (0-indexed)
         "-c", covariates_str,
         "-m", MODEL,
-        "-n", "1",  # Index of first outcome column (1-indexed for display)
+        "-n", "8",  # Index of first outcome column (1-indexed for display)
         "-t", str(NUM_WORKERS),
         "--phewas",
         "-q",  # Quiet mode
@@ -174,7 +174,7 @@ def main():
         print(f"{r['n_covariates']:>12} {r['time_seconds']:>12.2f} {r['max_rss_mb']:>14.1f}")
 
     # Save results to CSV
-    output_file = output_dir / "benchmark_memory_scaling_python_results.csv"
+    output_file = output_dir / "IPC_benchmark_memory_covariate_scaling_python_results.csv"
     with open(output_file, "w") as f:
         f.write("n_covariates,time_seconds,max_rss_kb,max_rss_mb,covariates\n")
         for r in results:
