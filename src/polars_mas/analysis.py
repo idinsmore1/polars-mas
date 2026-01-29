@@ -24,7 +24,7 @@ def run_associations_ipc(config: MASConfig) -> pl.DataFrame:
     original_env = os.environ.get("POLARS_MAX_THREADS")
     os.environ["POLARS_MAX_THREADS"] = str(config.num_threads)
     try:
-        results = Parallel(n_jobs=config.num_workers, verbose=0, backend="loky")(
+        results = Parallel(n_jobs=config.num_workers, verbose=0, backend="loky", return_as="generator_unordered")(
             delayed(_perform_analysis_ipc)(predictor, dependent, config, i, num_groups)
             for i, (predictor, dependent) in enumerate(targets, 1)
         )
@@ -57,7 +57,13 @@ def _perform_analysis_ipc(
             .drop_nulls([predictor, dependent])
             .collect()
         )
-
+        model_funcs = {
+            "firth": firth_regression,
+            "logistic": logistic_regression,
+            "linear": linear_regression,
+        }
+        reg_func = model_funcs[config.model]
+        # TODO - Handle quantitative flag - it's probably unnecessary
         # Validate data structure
         schema = _validate_data_structure(df, predictor, dependent, config, schema)
         if schema.get("failed_reason", "nan") != "nan":
@@ -75,13 +81,6 @@ def _perform_analysis_ipc(
 
         X = df.select([pred_col, *covariates])
         y = df.get_column(dep_col).to_numpy()
-
-        model_funcs = {
-            "firth": firth_regression,
-            "logistic": logistic_regression,
-            "linear": linear_regression,
-        }
-        reg_func = model_funcs[config.model]
 
         try:
             results = reg_func(X, y)

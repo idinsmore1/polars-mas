@@ -68,7 +68,7 @@ def logistic_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
         "ci_high": result.conf_int()[0][1],
     }
 
-
+# TODO - switch this to polars-ols?
 def linear_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
     X = sm.add_constant(X.to_numpy(), prepend=False)
     model = sm.OLS(y, X)
