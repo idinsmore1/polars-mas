@@ -36,7 +36,6 @@ def firth_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
             max_step=5.0,
             gtol=1e-5,
             xtol=1e-5,
-            backend='numba'
         )
         fl.fit(X, y).lrt(0, warm_start=True)
         for warning in w:
@@ -55,18 +54,29 @@ def firth_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
 
 def logistic_regression(X: pl.DataFrame, y: np.ndarray) -> dict:
     """Run standard logistic regression on the given data using statsmodels"""
-    X = sm.add_constant(X.to_numpy(), prepend=False)
-    model = sm.Logit(y, X)
-    result = model.fit(disp=0)
-    return {
-        "pval": result.pvalues[0],
-        "beta": result.params[0],
-        "se": result.bse[0],
-        "OR": np.e ** result.params[0],
-        "converged": result.converged,
-        "ci_low": result.conf_int()[0][0],
-        "ci_high": result.conf_int()[0][1],
-    }
+    with warnings.catch_warnings(record=True) as w:
+        converged = True
+        fl = FirthLogisticRegression(
+            max_iter=25,
+            max_halfstep=0,
+            max_step=5.0,
+            gtol=1e-5,
+            xtol=1e-5,
+            penalty_weight=0 # this is the same as logistic regression - with speedups
+        )
+        fl.fit(X, y)
+        for warning in w:
+            if issubclass(warning.category, ConvergenceWarning):
+                converged = False
+        return {
+            "pval": fl.pvalues_[0],
+            "beta": fl.coef_[0],
+            "se": fl.bse_[0],
+            "OR": np.e ** fl.coef_[0],
+            "converged": converged,
+            "ci_low": fl.conf_int()[0][0],
+            "ci_high": fl.conf_int()[0][1],
+        }
 
 # TODO - switch this to polars-ols?
 def linear_regression(X: pl.DataFrame, y: np.ndarray) -> dict:

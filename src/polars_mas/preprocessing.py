@@ -114,17 +114,17 @@ def write_temp_ipc(lf: pl.LazyFrame, config: MASConfig) -> None:
     import shutil
     import os
 
-    ipc_dir = None
-    if sys.platform == "linux" and os.path.exists("/dev/shm"):
-        shm_usage = shutil.disk_usage("/dev/shm")
-        # Use /dev/shm if at least 2GB free
-        if shm_usage.free > 2 * 1024**3:
-            ipc_dir = "/dev/shm"
-            logger.info("Using /dev/shm for IPC file (shared memory).")
-        else:
-            logger.info("/dev/shm has insufficient space, falling back to temp directory.")
+    # ipc_dir = None
+    # if sys.platform == "linux" and os.path.exists("/dev/shm"):
+    #     shm_usage = shutil.disk_usage("/dev/shm")
+    #     # Use /dev/shm if at least 2GB free
+    #     if shm_usage.free > 2 * 1024**3:
+    #         ipc_dir = "/dev/shm"
+    #         logger.info("Using /dev/shm for IPC file (shared memory).")
+    #     else:
+    #         logger.info("/dev/shm has insufficient space, falling back to temp directory.")
 
-    tf = tempfile.NamedTemporaryFile(delete=False, suffix=".ipc", dir=ipc_dir)
+    tf = tempfile.NamedTemporaryFile(delete=False, suffix=".ipc")
     tf_name = tf.name
     tf.close()
     lf.sink_ipc(tf_name)
